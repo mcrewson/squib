@@ -4,7 +4,7 @@
 # $Id: main.py 8613 2011-07-15 20:33:36Z markc $
 #
 
-import os, re, signal, tempfile, time
+import os, re, signal, sys, tempfile, time
 
 from core.application       import Application
 from core.async             import get_reactor
@@ -16,6 +16,7 @@ from core.string_conversion import convert_to_bool, convert_to_comma_list, \
 
 import metrics
 import squib
+import statistics
 import utility
 
 ##############################################################################
@@ -142,6 +143,7 @@ class SquibMain (Application):
 
             self.reactor.call_later(self.housekeeping_period, self.housekeeping)
             self.reactor.call_later(self.report_period, self.report)
+            statistics.schedule_ewma_decay()
             self.reactor.start()
         except (KeyboardInterrupt, SystemExit):
             raise
