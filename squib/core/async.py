@@ -203,7 +203,7 @@ class SocketReactable (Reactable):
         self.socket.setblocking(0)
         self.add_to_reactor()
 
-    def create_socket (self, family, type):
+    def create_socket (self, family=socket.AF_INET, type=socket.SOCK_STREAM):
         self.set_socket(socket.socket(family, type))
 
     def on_accept (self, sock, addr):
@@ -216,6 +216,10 @@ class SocketReactable (Reactable):
 
     def fileno (self):
         return self.socket.fileno()
+
+    def writable (self):
+        if not self.connected: return True
+        super(SocketReactable, self).writable()
 
     def handle_read_event (self):
         if self.accepting:
