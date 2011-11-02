@@ -35,6 +35,8 @@ def traffic ():
             terrors = int(parts[10], 10)
             tdrops = int(parts[11], 10)
 
+        if iface == 'lo': continue
+
         prev = _prev_traf.get(iface)
         if prev is None:
             _prev_traf[iface] = (rbytes, rpackets, rerrors, rdrops, 
