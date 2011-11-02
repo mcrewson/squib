@@ -3,7 +3,7 @@
 # $Id: async.py 8607 2011-07-14 20:56:12Z markc $
 #
 
-import errno, heapq, logging, select, socket, sys, time
+import errno, fcntl, heapq, logging, os, select, socket, sys, time
 
 try:
     from collections import deque
@@ -23,12 +23,39 @@ _reraised_exceptions = (KeyboardInterrupt, SystemExit)
 
 class Reactable (object):
 
+    in_buffer_size  = 4096
+    out_buffer_size = 4096
+
     def __init__ (self, reactor=None):
-        object.__init__(self)
-        if reactor is None:
-            reactor = get_reactor()
-        self.reactor = reactor
-        self.fd = None
+        super(Reactable, self).__init__()
+        self.reactor = reactor or get_reactor()
+        self.closed = False
+        self.fifo = deque()
+
+    def on_data_read (self, data):
+        pass
+
+    def on_closed (self):
+        pass
+
+    def write_data (self, data):
+        obs = self.out_buffer_size
+        if len(data) > obs:
+            for i in xrange(0, len(data), obs):
+                self.fifo.append(data[i:i+obs])
+        else:
+            self.fifo.append(data)
+
+    def close (self):
+        self.closed = True
+        self.del_from_reactor()
+        self.handle_close()
+        self.on_closed()
+
+    def close_when_done (self):
+        self.fifo.append(None)
+
+    ##############################################
 
     def add_to_reactor (self):
         self.reactor.add_reactable(self)
@@ -36,24 +63,65 @@ class Reactable (object):
     def del_from_reactor (self):
         self.reactor.del_reactable(self)
 
+    def fileno (self):
+        raise NotImplementedError
+
     def readable (self):
-        return True
+        return not self.closed
 
     def writable (self):
-        return True
-
-    def fileno (self):
-        return self.fd
+        return not self.closed and self.fifo
 
     def handle_read_event (self):
-        logging.warning("Unhandled reactable read event")
+        data = self.handle_read()
+        if data:
+            self.on_data_read(data)
+        else:
+            self.close()
 
     def handle_write_event (self):
-        logging.warning("Unhandled reactable write event")
+        while self.fifo and self.closed == False:
+            first = self.fifo[0]
+
+            # handle empty string/buffer or None entry
+            if first is None:
+                self.close()
+                return
+
+            # find data to write
+            obs = self.out_buffer_size
+            try:
+                data = buffer(first, 0, obs)
+            except TypeError:
+                data = first.more()
+                if daa:
+                    self.fifo.appendleft(data)
+                else:
+                    del self.fifo[0]
+                continue
+
+            # write it!
+            num_written = self.handle_write(data)
+            if num_written:
+                if num_written < len(data) or obs < len(first):
+                    self.fifo[0] = first[num_written:]
+                else:
+                    del self.fifo[0]
 
     def handle_exception_event (self):
-        logging.warning("Unhandled reactable exception event")
+        self.close()
 
+    ##############################################
+
+    def handle_read (self):
+        logging.warning("Unhandled reactable read event")
+
+    def handle_write (self, data):
+        logging.warning("Unhandled reactable write event")
+
+    def handle_close (self):
+        logging.warning("Unhandled reactable close event")
+        
     def handle_error (self):
         try:
             self_repr = repr(self)
@@ -69,117 +137,159 @@ class Reactable (object):
 
 ##############################################################################
 
+class FileDescriptorReactable (Reactable):
+
+    def __init__ (self, fd=None, reactor=None):
+        super(FileDescriptorReactable, self).__init__(reactor=reactor)
+        if fd is not None:
+            self.set_filedescriptor(fd)
+
+    def set_filedescriptor (self, fd):
+        self.fd = fd
+        flags = fcntl.fcntl(self.fd, fcntl.F_GETFL)
+        flags = flags | os.O_NONBLOCK
+        fcntl.fcntl(self.fd, fcntl.F_SETFL, flags)
+        self.add_to_reactor()
+
+    ###########################################
+
+    def fileno (self):
+        return self.fd
+
+    def handle_read (self):
+        try:
+            return os.read(self.fd, self.in_buffer_size)
+        except OSError, err:
+            if err[0] in (errno.EWOULDBLOCK, errno.EBADF, errno.EINTR):
+                return ''
+            else:
+                raise
+
+    def handle_write (self, data):
+        try:
+            return os.write(self.fd, data)
+        except OSError, err:
+            if err[0] not in (errno.EBADF):
+                raise
+
+    def handle_close (self):
+        try:
+            os.close(self.fd)
+        except OSError:
+            pass
+
+##############################################################################
+
+class ReadOnlyFileDescriptorReactable (FileDescriptorReactable):
+
+    def writable (self):
+        return False
+
+##############################################################################
+
 class SocketReactable (Reactable):
 
     connected = False
     accepting = False
 
-    def __init__ (self, sock=None, reactor=None):
-        Reactable.__init__(self, reactor)
+    def __init__ (self, addr=None, sock=None, reactor=None):
+        super(SocketReactable, self).__init__(reactor=reactor)
+        self.address = addr
         if sock is not None:
             self.set_socket(sock)
 
     def set_socket (self, sock):
         self.socket = sock
         self.socket.setblocking(0)
-        self.fd = self.socket.fileno()
         self.add_to_reactor()
+
+    def create_socket (self, family, type):
+        self.set_socket(socket.socket(family, type))
+
+    def on_accept (self, sock, addr):
+        pass
+
+    def on_connect (self):
+        pass
+
+    ##############################################
+
+    def fileno (self):
+        return self.socket.fileno()
 
     def handle_read_event (self):
         if self.accepting:
             if not self.connected:
                 self.connected = True
-            self.do_accept()
-        elif not self.connected:
-            self.do_connect()
+            self.handle_accept()
+            return
+        if not self.connected:
+            self.handle_connect()
             self.connected = True
-            self.do_read()
-        else:
-            self.do_read()
+        super(SocketReactable, self).handle_read_event()
 
     def handle_write_event (self):
         if not self.connected:
-            self.do_connect()
+            self.handle_connect()
             self.connected = True
-        self.do_write()
+        super(SocketReactable, self).handle_write_event()
 
-    def do_accept (self):
-        pass
-
-    def do_connect (self):
-        pass
-
-    def do_read (self):
-        pass
-
-    def do_write (self):
-        pass
-
-    def do_close (self):
-        pass
-
-    # Socket object methods
-
-    def create_socket (self, family, type):
-        self.set_socket(socket.socket(family, type))
-
-    def accept (self):
+    def handle_accept (self):
         try:
-            return self.socket.accept()
+            sock, addr = self.socket.accept()
+            self.on_accept(sock, addr)
         except socket.error, err:
             if err.args[0] != errno.EWOULDBLOCK:
                 raise
 
-    def bind (self, addr):
-        self.socket.bind(addr)
-
-    def close (self):
+    def handle_connect (self):
+        assert self.address is not None, "no address specified for connect"
         self.connected = False
-        self.accepting = False
-        self.del_from_reactor()
-        try:
-            self.socket.close()
-        except socket.error, err:
-            if err.args[0] not in (errno.ENOTCONN, errno.EBADF):
-                raise
-
-    def connect (self, addr):
-        self.connected = False
-        err = self.socket.connect_ex(addr)
+        err = self.socket.connect_ex(self.address)
         if err in (errno.EINPROGRESS, errno.EALREADY, errno.EWOULDBLOCK):
             return
         if err in (errno.EISCONN, 0):
             self.connected = True
-            self.do_connect()
+            self.on_connect()
         else:
             raise socket.error(err, errorcode[err])
 
-    def listen (self, num):
-        self.accepting = True
-        return self.socket.listen(num)
-
-    def recv (self, buffer_size):
+    def handle_read (self):
         try:
-            data = self.socket.recv(buffer_size)
-            if not data:
-                self.do_close()
-                return ''
-            else:
-                return data
+            return self.socket.recv(self.in_buffer_size)
         except socket.error, err:
             if err.args[0] in (errno.ECONNRESET, errno.ENOTCONN, errno.ESHUTDOWN):
-                self.do_close()
                 return ''
             else:
                 raise
 
-    def send (self, data):
+    def handle_write (self, data):
         try:
             return self.socket.send(data)
         except socket.error, err:
             if err.args[0] != errno.EWOULDBLOCK:
                 raise
             return 0
+
+    def handle_close (self):
+        self.connected = False
+        self.accepting = False
+        try:
+            self.socket.close()
+        except socket.error, err:
+            if err.args[0] not in (errno.ENOTCONN, errno.EBADF):
+                raise
+
+    ##############################################
+
+    # Socket object methods
+
+    def bind (self, addr):
+        self.socket.bind(addr)
+
+    def listen (self, num):
+        self.accepting = True
+        return self.socket.listen(num)
 
     def set_reuse_addr (self):
         try:
@@ -194,10 +304,10 @@ class SocketReactable (Reactable):
 if ssl_supported == True:
     class SSLSocketReactable (SocketReactable):
 
-        def __init__ (self, cert, pkey, cacert=None, sock=None, reactor=None):
+        def __init__ (self, cert, pkey, cacert=None, addr=None, sock=None, reactor=None):
             self.ssl_ctx = None
             self.set_ssl_certificate(cert, pkey, cacert)
-            SocketReactable.__init__(self, sock, reactor)
+            super(SSLSocketReactable, self).__init__(addr, sock, reactor)
 
         def set_ssl_certificae (self, cert, pkey, cacert=None):
             self.set_ssl_context(self._create_ssl_context(cert, pkey, cacert))
@@ -211,10 +321,10 @@ if ssl_supported == True:
                 sock = SSL.Connection(self.ssl_ctx, sock)
             self.set_socket(sock)
 
-        def recv (self, buffer_size):
+        def handle_read (self):
             while True:
                 try:
-                    return SocketReactable.recv(self, buffer_size)
+                    return super(SSLSocketReactable, self).handle_read()
                 except SSL.ZeroReturnError:
                     return ''
                 except SSL.WantReadError:
@@ -225,13 +335,13 @@ if ssl_supported == True:
                         return ''
                     raise
 
-        def send (self, data):
+        def handle_write (self, data):
             while True:
                 try:
-                    return SocketReactable.send(self, data)
+                    return super(SSLSocketReactable, self).handle_write(data)
                 except SSL.SysCallError, e:
                     if e.args[0] == errno.EPIPE:
-                        self.do_close()
+                        self.close()
                         return 0
                     elif e.args[0] == errno.EWOULDBLOCK:
                         return 0
@@ -272,137 +382,47 @@ if ssl_supported == True:
 
 class Protocol (SocketReactable):
 
-    in_buffer_size  = 4096
-    out_buffer_size = 4096
+    message_delimiter = None
+    message_max_size  = 16384
 
-    def __init__ (self, sock=None, addr=None, reactor=None):
-        self.remote_address = addr
-        self.fifo = deque()
-        SocketReactable.__init__(self, sock, reactor)
+    __buffer = ''
 
-    def do_read (self):
-        data = self.recv(self.in_buffer_size)
-        if data:
-            return self.data_received(data)
+    def on_message_received (self, message):
+        pass
 
-    def do_write (self):
-        self.initiate_send()
+    def on_message_size_exceeded (self):
+        self.close_when_done()
 
-    def do_close (self):
-        self.close()
-
-    def writable (self):
-        return self.fifo or (not self.connected)
-
-    def push (self, data):
-        obs = self.out_buffer_size
-        if len(data) > obs:
-            for i in xrange(0, len(data), obs):
-                self.fifo.append(data[i:i+obs])
-        else:
-            self.fifo.append(data)
-        self.initiate_send()
-
-    def close_when_done (self):
-        self.fifo.append(None)
-
-    def data_received (self, data):
-        raise NotImplementedError("Unhandled protocol data_received method")
-
-    def initiate_send (self):
-        while self.fifo and self.connected:
-            first = self.fifo[0]
-            # handle empty string/buffer or None entry
-            if not first:
-                del self.fifo[0]
-                if first is None:
-                    self.do_close()
-                    return
-
-            # find data to send
-            obs = self.out_buffer_size
-            try:
-                data = buffer(first, 0, obs)
-            except TypeError:
-                data = first.more()
-                if data:
-                    self.fifo.appendleft(data)
-                else:
-                    del self.fifo[0]
-                continue
-
-            # send it!
-            try:
-                num_sent = self.send(data)
-            except socket.error, err:
-                if err.args[0] != errno.EWOULDBLOCK:
-                    raise
-                return
-
-            if num_sent:
-                if num_sent < len(data) or obs < len(first):
-                    self.fifo[0] = first[num_sent:]
-                else:
-                    del self.fifo[0]
-
+    def on_data_read (self, data):
+        self.__buffer = self.__buffer + data
+        try:
+            message, self.__buffer = self.__buffer.split(self.message_delimiter, 1)
+        except ValueError:
+            if len(self.__buffer) > self.max_message_size:
+                self.__buffer = ''
+                return self.on_message_size_exceeded()
             return
+
+        message_size = len(message)
+        if message_size > self.message_max_size:
+            return self.on_message_size_exceeded(message)
+
+        self.on_message_received(message)
 
 ##############################################################################
 
 class LineOrientedProtocol (Protocol):
 
-    line_mode = 1
-    __buffer = ''
-    delimiter = '\r\n'
-    MAX_LENGTH = 16384
-
-    def data_received (self, data):
-        self.__buffer = self.__buffer + data
-        while self.line_mode:
-            try:
-                line, self.__buffer = self.__buffer.split(self.delimiter, 1)
-            except ValueError:
-                if len(self.__buffer) > self.MAX_LENGTH:
-                    line, self.__buffer = self.__buffer, ''
-                    return self.line_length_exceeded(line)
-                break
-            else:
-                linelength = len(line)
-                if linelength > self.MAX_LENGTH:
-                    exceeded = line + self.__buffer
-                    self.__buffer = ''
-                    return self.line_length_exceeded(exceeded)
-                self.line_received(line)
-        else:
-            data, self.__buffer = self.__buffer, ''
-            if data:
-                self.raw_data_received(data)
-
-    def set_line_mode (self, extra=''):
-        self.line_mode = 1
-        if extra:
-            self.data_received(extra)
-
-    def set_raw_mode (self):
-        self.line_mode = 0
-
-    def line_received (self, line):
-        raise NotImplementedError
-
-    def raw_data_received (self, data):
-        raise NotImplementedError
-
-    def push_line (self, line):
-        self.push(line + self.delimiter)
-
-    def line_length_exceeded (self, line):
-        self.close_when_done()
+    message_delimiter = '\n'
+    
+    def write_line (self, line):
+        self.write_data(line + self.message_delimiter)
 
 ##############################################################################
 
-class ProtocolTimeout:
+class ReactableTimeout:
     """
-    Mixin for protocols that wish to timeout connections.
+    Mixin for reactables that wish to have timeouts.
     """
 
     timeout = None
@@ -434,16 +454,16 @@ class ProtocolTimeout:
         if self.__timeout_call is not None and self.timeout is not None:
             self.__timeout_call.reset(self.timeout)
 
-    def connection_timeout (self):
+    def on_timeout (self):
         """
         Called when the connection times out. Override this method to
         define behavior other than dropping the connection.
         """
-        self.do_close()
+        self.close()
 
     def __timed_out (self):
         self.__timeout_call = None
-        self.connection_timeout()
+        self.on_timeout()
 
 ##############################################################################
 
@@ -452,7 +472,7 @@ class Server (SocketReactable):
     def __init__ (self, bind_address, protocol, sock=None, reactor=None):
         self.bind_address = bind_address
         self.protocol = protocol
-        SocketReactable.__init__(self, sock, reactor)
+        super(Server, self).__init__(sock=sock, reactor=reactor)
         if not sock:
             self.create_socket(socket.AF_INET, socket.SOCK_STREAM)
             self.set_reuse_addr()
@@ -464,9 +484,8 @@ class Server (SocketReactable):
     def writable (self):
         return False
 
-    def do_accept (self):
-        sock, addr = self.accept()
-        self.protocol(sock, addr, self.reactor)
+    def on_accept (self, sock, addr):
+        self.protocol(addr, sock, self.reactor)
 
 ##############################################################################
 
@@ -804,29 +823,28 @@ def set_reactor (reactor):
 
 def __test ():
 
-    class ChatProtocol (LineOrientedProtocol, ProtocolTimeout):
+    class ChatProtocol (LineOrientedProtocol, ReactableTimeout):
 
         channels = dict()
 
         idletime = 60
 
         def __init__ (self, sock, addr, reactor):
-            LineOrientedProtocol.__init__(self, sock, addr, reactor)
+            super(ChatProtocol, self).__init__(sock, addr, reactor)
             ChatProtocol.channels[self] = 1
             self.nick = None
-            self.push('nickname: ')
+            self.write_data('nickname: ')
             self.set_timeout(self.idletime)
 
-        def close (self):
+        def on_closed (self):
             del ChatProtocol.channels[self]
-            LineOrientedProtocol.close(self)
 
-        def connection_timeout (self):
-            self.push_line("Connection timed out. Goodbye.")
+        def on_timeout (self):
+            self.write_line("Connection timed out. Goodbye.")
             self.handle_talk("[quit - timed out]")
             self.close_when_done()
 
-        def line_received (self, line):
+        def on_message_received (self, line):
             self.reset_timeout()
             if self.nick is None:
                 try:
@@ -834,11 +852,11 @@ def __test ():
                 except IndexError:
                     self.nick = None
                 if not self.nick:
-                    self.push_line("Huh?")
-                    self.push('nickname: ')
+                    self.write_line("Huh?")
+                    self.write_data('nickname: ')
                 else:
                     # Greet
-                    self.push_line("Hello, %s" % self.nick)
+                    self.write_line("Hello, %s" % self.nick)
                     self.handle_talk("[joined]")
                     self.cmd_callers(None)
             else:
@@ -851,7 +869,7 @@ def __test ():
         def handle_talk (self, line):
             for channel in ChatProtocol.channels.keys():
                 if channel is not self:
-                    channel.push_line("%s: %s" % (self.nick, line))
+                    channel.write_line("%s: %s" % (self.nick, line))
 
         def handle_command (self, line):
             command = line.split()
@@ -861,14 +879,14 @@ def __test ():
                 if callable(method):
                     method(command[1:])
                     return
-            self.push_line('unknown command: %s' % command[0])
+            self.write_line('unknown command: %s' % command[0])
 
         def cmd_quit (self, args):
             if args:
                 self.handle_talk('[quit] (%s)' % ' '.join(args))
             else:
                 self.handle_talk('[quit]')
-            self.push_line('goodbye.')
+            self.write_line('goodbye.')
             self.close_when_done()
 
         cmd_q = cmd_quit
@@ -876,11 +894,11 @@ def __test ():
         def cmd_callers (self, args):
             num_channels = len(ChatProtocol.channels)
             if num_channels == 1:
-                self.push_line("[You're the only caller]")
+                self.write_line("[You're the only caller]")
             else:
-                self.push_line("[There are %d callers]" % (num_channels))
+                self.write_line("[There are %d callers]" % (num_channels))
                 nicks = [ x.nick or '<unknown>' for x in ChatProtocol.channels.keys() ]
-                self.push(' ' + '\r\n '.join(nicks) + '\r\n')
+                self.write_data(' ' + '\r\n '.join(nicks) + '\r\n')
 
     Server(bind_address=('', 8518), protocol=ChatProtocol).activate()
     get_reactor().start()

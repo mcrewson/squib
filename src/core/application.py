@@ -5,10 +5,12 @@
 
 __all__ = [ 'Application', 'get_app', ]
 
-import logging, sys, traceback
+import logging, signal, sys, traceback
 
-from core.baseobject import BaseObject, NonStdlibError
-from core.config     import Config, ConfigError
+from core.async             import get_reactor
+from core.baseobject        import BaseObject, NonStdlibError
+from core.config            import Config, ConfigError
+from core.string_conversion import convert_to_floating
 
 #############################################################################
 
@@ -114,7 +116,7 @@ class Application (BaseObject):
         pass
 
     def setup (self):
-        raise NotImplementedError("Override this function to do setup work")
+        pass
 
     def run (self):
         raise NotImplementedError("Override this function to do something")
