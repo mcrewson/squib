@@ -12,7 +12,7 @@ from squib.core.log               import get_logger
 from squib.core.multiproc         import ParentController
 from squib.core.string_conversion import convert_to_bool, ConversionError
 
-from squib import metrics, oxidizer, statistics, utility
+from squib import metrics, oxidizer, reporter, statistics, utility
 
 ##############################################################################
 
@@ -40,6 +40,7 @@ class SquibMain (Application):
         super(SquibMain, self).setup()
         self.configure_logging()
         self.configure_metrics_recorder()
+        self.configure_reporter()
         self.configure_oxidizers()
         self.daemonize()
 
@@ -57,7 +58,7 @@ class SquibMain (Application):
         except IOError, e:
             self.abort("Cannot open log file: %s" % e)
 
-        self.log.info("%s %s START" % (self.app_name, self.app_version))
+        self.log.info("%s %s INITIALIZING" % (self.app_name, self.app_version))
         for msg in self.prelog_error_messages:
             self.log.error(msg)
         for msg in self.prelog_info_messages:
@@ -69,8 +70,23 @@ class SquibMain (Application):
             hostname = hostname.split('.', 1)[0]
         self.metrics_recorder = metrics.MetricsRecorder(prefix='%s.' % hostname)
 
+    def configure_reporter (self):
+        try:
+            reporter_config = self.config.section('reporter')
+        except KeyError:
+            self.log.warning('No reporter defined. Falling back to SimpleLogReporter.')
+            self.reporter = reporter.SimpleLogReporter(None, self.metrics_recorder)
+        else:
+            reporter_klass = reporter_config.get('class')
+            if reporter_klass is None:
+                self.log.warning('No report class defined. Falling back to SimpleLogReporter.')
+                self.reporter = reporter.SimpleLogReporter(None, self.metrics_recorder)
+            else:
+                klass = utility.find_python_object(reporter_klass)
+                self.reporter = klass(reporter_config, self.metrics_recorder)
+
     def configure_oxidizers (self):
-        self.controller = SquibController(self.metrics_recorder)
+        self.controller = SquibController(self.reporter)
         for ox in self.config.read_nonconfig_section('oxidizers'):
             ox = ox.strip()
             if not ox or ox.startswith('#'): continue
@@ -95,40 +111,34 @@ class SquibMain (Application):
                 raise ConfigError("nodaemon must be a boolean")
 
     def run (self):
+        self.log.info("%s %s STARTED" % (self.app_name, self.app_version))
         self.controller.start()
-        self.log.info("%s %s STOP" % (self.app_name, self.app_version))
+        self.log.info("%s %s STOPPED" % (self.app_name, self.app_version))
 
 ##############################################################################
 
 import socket
 
 class SquibController (ParentController):
+    """
+    The squib main loop controller. This object manages the oxidizer children and
+    triggers the reporter.
+    """
 
-    report_period       = 10.0 # seconds
-
-    def __init__ (self, metrics_recorder, **kw):
+    def __init__ (self, reporter, **kw):
         super(SquibController, self).__init__(**kw)
-        self.metrics_recorder = metrics_recorder
+        self.reporter = reporter
+        self.report_period = self.reporter.get_report_period()
 
     def setup (self):
         self.reactor.call_later(self.report_period, self.report)
         statistics.schedule_ewma_decay()
 
     def report (self):
-        lines = self.metrics_recorder.publish()
-
-        sock = socket.socket()
         try:
-            sock.connect(('127.0.0.1', 2003))
-        except:
-            self.log.error("Failed to connect to graphite backend.")
-            return
-
-        message = '\n'.join(lines) + '\n'
-        sock.sendall(message)
-        sock.close()
-
-        self.reactor.call_later(self.report_period, self.report)
+            self.reporter.send_report()
+        finally:
+            self.reactor.call_later(self.report_period, self.report)
 
 
 ##############################################################################

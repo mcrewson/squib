@@ -122,4 +122,18 @@ def calculate_hostname ():
     return name
 
 ##############################################################################
+
+def find_python_object (name, module=None):
+    if '.' not in name:
+        return getattr(module, name)
+    else:
+        try:
+            module = '.'.join(name.split('.')[:-1])
+            exec 'import ' + module
+            return eval(name)
+        except (ImportError, AttributeError), err:
+            logging.error('Failed to import %s (%s)' % (name, str(err)))
+            return None
+
+##############################################################################
 ## THE END
