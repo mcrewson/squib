@@ -16,6 +16,7 @@ def memory ():
     print 'mem.free %d' % (mem[1])
     print 'mem.buffers %d' % (mem[2])
     print 'mem.cached %d' % (mem[3])
+    print 'mem.used %d' %(mem[0] - sum(mem[1:]))
     sys.stdout.flush()
 
 def run (poll_interval):
