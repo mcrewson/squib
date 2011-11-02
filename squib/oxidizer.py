@@ -5,6 +5,7 @@ from squib.core.async     import ReadOnlyFileDescriptorReactable
 from squib.core.config    import ConfigError
 from squib.core.log       import get_logger
 from squib.core.multiproc import ChildController
+from squib.oxidizers.base import BasePythonOxidizer
 
 from squib import utility
 
@@ -54,9 +55,6 @@ class PythonOxidizer (BaseOxidizer):
 
         try:
             obj = utility.find_python_object(klass)
-            print "oxidizer object = %s" % obj
-            print "type = %s" % type(obj)
-            print "type = %s" % type(utility)
         except ImportError, err:
             raise ConfigError("Cannot find the oxidizer object: %s" % klass)
 
@@ -64,8 +62,7 @@ class PythonOxidizer (BaseOxidizer):
         if type(obj) is type and issubclass(obj, BasePythonOxidizer):
             # A BasePythonOxidizer class!
             # Instantiate it and invoke
-            self.oxidizer = obj(self.config)
-            ox.run()
+            self.oxidizer = obj(self.name, self.config)
 
         elif type(obj) is type(utility):
             # Python module. If it has a run() function, we'll invoke that
