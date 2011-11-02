@@ -401,7 +401,7 @@ class ChildController (object):
         elif os.WIFSIGNALED(sts):
             es = -1
             sig = os.WTERMSIG(sts)
-            msg = "terminated by %s" % signame(sig)
+            msg = "terminated by %s" % _signame(sig)
             if hasattr(os, "WCOREDUMP"):
                 iscore = os.WCOREDUMP(sts)
             else:
@@ -506,7 +506,7 @@ def _close_child_pipes (pipes):
         if fd is not None:
             _close_fd(fd)
 
-def _waitpid ()
+def _waitpid ():
     # need pthread_sigmask here to avoid concurrent sigchld, but Python
     # does not offer it as its not standard across UNIX versions. There is
     # still a raise condition here; we can get a sigchld while we're
@@ -515,7 +515,7 @@ def _waitpid ()
         pid, sts = os.waitpid(-1, os.WNOHANG)
     except OSError, why:
         err = why[0]
-        if err no in (errno.ECHILD, errno.EINTR):
+        if errno in (errno.ECHILD, errno.EINTR):
             logging.critical("waitpid error; a process may not be cleaned up properly")
         if err == errno.EINTR:
             logging.debug("EINTR during reap")
