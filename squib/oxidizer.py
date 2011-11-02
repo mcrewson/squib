@@ -1,12 +1,12 @@
 # vim:set ts=4 sw=4 et nowrap syntax=python ff=unix:
 #
 
-import sys
-
 from squib.core.async     import ReadOnlyFileDescriptorReactable
 from squib.core.config    import ConfigError
 from squib.core.log       import get_logger
 from squib.core.multiproc import ChildController
+
+from squib import utility
 
 ##############################################################################
 
@@ -24,6 +24,10 @@ class BaseOxidizer (ChildController):
         super(BaseOxidizer, self).__init__(name)
         self.config = config
         self.metrics_recorder = metrics_recorder
+        self.setup()
+
+    def setup (self):
+        pass
 
     def get_stdout_reactable (self, stdout_fd):
         return MetricsReader(self.metrics_recorder, stdout_fd)
@@ -35,20 +39,53 @@ class BaseOxidizer (ChildController):
 
 class PythonOxidizer (BaseOxidizer):
 
-    def get_oxidizer_module (self, fqclass):
-        __import__(fqclass)
-        return sys.modules[fqclass]
+    def setup (self):
 
-    def run (self):
+        class OxidizerCallableWrapper (object):
+            def __init__ (inself, call, conf):
+                inself.call = call
+                inself.conf = conf
+            def run (inself):
+                inself.call(inself.conf)
+
         klass = self.config.get("class")
         if klass is None:
             raise ConfigError("No class defined for this oxidizer")
 
-        module = self.get_oxidizer_module(klass)
-        run_method = getattr(module, 'run')
-        run_method(10.0)
+        try:
+            obj = utility.find_python_object(klass)
+            print "oxidizer object = %s" % obj
+            print "type = %s" % type(obj)
+            print "type = %s" % type(utility)
+        except ImportError, err:
+            raise ConfigError("Cannot find the oxidizer object: %s" % klass)
 
+        # How do we invoke this object?
+        if type(obj) is type and issubclass(obj, BasePythonOxidizer):
+            # A BasePythonOxidizer class!
+            # Instantiate it and invoke
+            self.oxidizer = obj(self.config)
+            ox.run()
 
+        elif type(obj) is type(utility):
+            # Python module. If it has a run() function, we'll invoke that
+            try:
+                run_function = getattr(obj, 'run')
+            except AttributeError:
+                raise ConfigError("Cannot invoke an oxidizer module without a 'run' function: %s" % klass)
+            self.oxidizer = OxidizerCallableWrapper(run_function, self.config)
+
+        elif callable(obj):
+            # Some other callable object. Try to invoke it directly
+            self.oxidizer = OxidizerCallableWrapper(obj, self.config)
+
+        else:
+            # Give up
+            raise ConfigError("Cannot determine how to invoke this oxidizer: %s" % klass)
+
+    def run (self):
+        self.oxidizer.run()
+            
 ##############################################################################
 
 class MetricsReader (ReadOnlyFileDescriptorReactable):

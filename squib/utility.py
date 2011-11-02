@@ -128,12 +128,14 @@ def find_python_object (name, module=None):
         return getattr(module, name)
     else:
         try:
-            module = '.'.join(name.split('.')[:-1])
-            exec 'import ' + module
-            return eval(name)
-        except (ImportError, AttributeError), err:
-            logging.error('Failed to import %s (%s)' % (name, str(err)))
-            return None
+            exec 'import ' + name
+        except ImportError:
+            try:
+                module = '.'.join(name.split('.')[:-1])
+                exec 'import ' + module
+            except (ImportError, AttributeError), err:
+                raise ImportError(err)
+        return eval(name)
 
 ##############################################################################
 ## THE END

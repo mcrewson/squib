@@ -31,15 +31,16 @@ def cpu_usage ():
         sys.stdout.flush()
     _prev_cpu = raw
 
-def run (poll_interval):
+def run (conf):
     global _prev_cpu
+    period = conf.get('period', 10.0)
     _prev_cpu = raw_cpu()
     time.sleep(0.25)
     while True:
         start = time.time()
         cpu_usage()
         done = time.time()
-        delay = poll_interval - (done - start)
+        delay = period - (done - start)
         if delay > 0.0: time.sleep(delay)
 
 if __name__ == '__main__':

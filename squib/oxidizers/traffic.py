@@ -64,12 +64,13 @@ def traffic ():
         print 'traffic.%s.tdrops meter +%d'   % (iface, td_diff)
         sys.stdout.flush()
 
-def run (poll_interval):
+def run (conf):
+    period = conf.get('period', 10.0)
     while True:
         start = time.time()
         traffic()
         done = time.time()
-        delay = poll_interval - (done - start)
+        delay = period - (done - start)
         if delay > 0.0: 
             try:
                 time.sleep(delay)

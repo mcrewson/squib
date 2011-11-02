@@ -98,7 +98,8 @@ class SquibMain (Application):
 
             try:
                 self.controller.add_child(oxidizer.create_oxidizer(ox, oxconfig, self.metrics_recorder))
-            except ConfigError:
+            except ConfigError, err:
+                self.log.warn(str(err))
                 self.log.warn("Invalid oxidizer named \"%s\". Ignored" % (ox))
 
     def daemonize (self):
