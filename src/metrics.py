@@ -20,8 +20,6 @@ class MetricsRecorder (object):
 
     def record (self, name, value):
         mtype, value = self.parse_value(value)
-        self.log.debug("mtype = %s" % mtype)
-        self.log.debug("value = %s" % value)
         if mtype is None:
             self.log.warn("Ignored invalid metric: \"%s %s\"" % (name, value))
             return
@@ -91,7 +89,6 @@ class GaugeMetric (BaseMetric):
     value = 0
     def __init__ (self, name):
         super(GaugeMetric, self).__init__(name)
-        self.log.debug("Created GaugeMetric(%s)" % name)
 
     def update (self, value):
         self.value = value
@@ -107,7 +104,6 @@ class CounterMetric (BaseMetric):
 
     def __init__ (self, name):
         super(CounterMetric, self).__init__(name)
-        self.log.debug("Created CounterMetric(%s)" % name)
 
     def update (self, value):
         if value[0] == '+':
@@ -128,7 +124,6 @@ class MeterMetric (BaseMetric):
 
     def __init__ (self, name):
         super(MeterMetric, self).__init__(name)
-        self.log.debug("Created CounterMetric(%s)" % name)
 
         self.startTime = time.time()
 
