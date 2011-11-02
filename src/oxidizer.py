@@ -10,18 +10,18 @@ from core.multiproc import ChildController
 
 ##############################################################################
 
-def create_squib (name, config, metrics_recorder):
+def create_oxidizer (name, config, metrics_recorder):
     if config.has_key("class"):
-        return PythonSquib(name, config, metrics_recorder)
+        return PythonOxidizer(name, config, metrics_recorder)
     else:
-        raise ConfigError("Unknown type of squib: %s" % name)
+        raise ConfigError("Unknown type of oxidizer: %s" % name)
 
 ##############################################################################
 
-class BaseSquib (ChildController):
+class BaseOxidizer (ChildController):
 
     def __init__ (self, name, config, metrics_recorder):
-        super(BaseSquib, self).__init__(name)
+        super(BaseOxidizer, self).__init__(name)
         self.config = config
         self.metrics_recorder = metrics_recorder
 
@@ -33,18 +33,18 @@ class BaseSquib (ChildController):
 
 ##############################################################################
 
-class PythonSquib (BaseSquib):
+class PythonOxidizer (BaseOxidizer):
 
-    def get_squib_module (self, fqclass):
+    def get_oxidizer_module (self, fqclass):
         __import__(fqclass)
         return sys.modules[fqclass]
 
     def run (self):
         klass = self.config.get("class")
         if klass is None:
-            raise ConfigError("No class defined for this squib")
+            raise ConfigError("No class defined for this oxidizer")
 
-        module = self.get_squib_module(klass)
+        module = self.get_oxidizer_module(klass)
         run_method = getattr(module, 'run')
         run_method(10.0)
 

@@ -15,7 +15,7 @@ from core.string_conversion import convert_to_bool, convert_to_comma_list, \
                                    ConversionError
 
 import metrics
-import squib
+import oxidizer
 import statistics
 import utility
 
@@ -76,19 +76,19 @@ class SquibMain (Application):
 
     def configure_oxidizers (self):
         self.controller = SquibController(self.metrics_recorder)
-        for sqname in self.config.read_nonconfig_section('oxidizers'):
-            sqname = sqname.strip()
-            if not sqname or sqname.startswith('#'): continue
+        for ox in self.config.read_nonconfig_section('oxidizers'):
+            ox = ox.strip()
+            if not ox or ox.startswith('#'): continue
             try:
-                sqconfig = self.config.section(sqname)
+                oxconfig = self.config.section(ox)
             except KeyError:
-                self.log.warn("No configuration for a squib named \"%s\". Ignored" % (sqname))
+                self.log.warn("No configuration for an oxidizer named \"%s\". Ignored" % (ox))
                 continue
 
             try:
-                self.controller.add_child(squib.create_squib(sqname, sqconfig, self.metrics_recorder))
+                self.controller.add_child(oxidizer.create_oxidizer(ox, oxconfig, self.metrics_recorder))
             except ConfigError:
-                self.log.warn("Invalid squib named \"%s\". Ignored" % (sqname))
+                self.log.warn("Invalid oxidizer named \"%s\". Ignored" % (ox))
 
     def daemonize (self):
         nodaemon = self.nodaemon
