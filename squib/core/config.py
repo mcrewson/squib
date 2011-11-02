@@ -33,7 +33,7 @@ class Config (BaseObject):
     DEFAULT_LONG_ARGUMENTS  = [ 'config=', 'option=', 'dump', 'quiet', 
                                 'trace', 'verbose', 'help' ]
 
-    DEFAULT_CONFIG_PATHS  = [ '/alea/etc', '/etc', '/usr/local/etc', '.' ]
+    DEFAULT_CONFIG_PATHS  = [ '/etc', '/usr/local/etc', '.' ]
 
     SECTION_REX  = re.compile(r'^\[(.*?)\]')
     KEYVALUE_REX = re.compile(r'^([^=]+)=(.*)$')
