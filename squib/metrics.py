@@ -5,9 +5,8 @@
 
 import time
 
-from core.log import get_logger
-
-import statistics
+from squib          import statistics
+from squib.core.log import get_logger
 
 ##############################################################################
 

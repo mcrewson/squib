@@ -3,10 +3,10 @@
 
 import sys
 
-from core.async     import ReadOnlyFileDescriptorReactable
-from core.config    import ConfigError
-from core.log       import get_logger
-from core.multiproc import ChildController
+from squib.core.async     import ReadOnlyFileDescriptorReactable
+from squib.core.config    import ConfigError
+from squib.core.log       import get_logger
+from squib.core.multiproc import ChildController
 
 ##############################################################################
 

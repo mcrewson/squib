@@ -7,10 +7,10 @@ __all__ = [ 'ParentController', 'ChildController' ]
 
 import errno, fcntl, logging, os, signal, sys, time, traceback
 
-from core.async             import get_reactor
-from core.baseobject        import BaseObject, NonStdlibError
-from core.log               import get_logger
-from core.string_conversion import convert_to_floating
+from squib.core.async             import get_reactor
+from squib.core.baseobject        import BaseObject, NonStdlibError
+from squib.core.log               import get_logger
+from squib.core.string_conversion import convert_to_floating
 
 ##############################################################################
 

@@ -7,10 +7,10 @@ __all__ = [ 'Application', 'get_app', ]
 
 import logging, signal, sys, traceback
 
-from core.async             import get_reactor
-from core.baseobject        import BaseObject, NonStdlibError
-from core.config            import Config, ConfigError
-from core.string_conversion import convert_to_floating
+from squib.core.async             import get_reactor
+from squib.core.baseobject        import BaseObject, NonStdlibError
+from squib.core.config            import Config, ConfigError
+from squib.core.string_conversion import convert_to_floating
 
 #############################################################################
 

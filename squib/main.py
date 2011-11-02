@@ -6,18 +6,13 @@
 
 import os, re, signal, sys, tempfile, time
 
-from core.application       import Application
-from core.config            import ConfigError
-from core.log               import get_logger
-from core.multiproc         import ParentController
-from core.string_conversion import convert_to_bool, convert_to_comma_list, \
-                                   convert_to_integer, convert_to_octal, \
-                                   ConversionError
+from squib.core.application       import Application
+from squib.core.config            import ConfigError
+from squib.core.log               import get_logger
+from squib.core.multiproc         import ParentController
+from squib.core.string_conversion import convert_to_bool, ConversionError
 
-import metrics
-import oxidizer
-import statistics
-import utility
+from squib import metrics, oxidizer, statistics, utility
 
 ##############################################################################
 

@@ -11,8 +11,8 @@ __all__ = [ 'LoggingFactory', 'get_logger', ]
 
 import logging, new, types, traceback
 
-from core.baseobject        import BaseObject
-from core.string_conversion import convert_to_bool
+from squib.core.baseobject        import BaseObject
+from squib.core.string_conversion import convert_to_bool
 
 ##############################################################################
 

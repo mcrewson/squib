@@ -5,7 +5,7 @@
 
 import math
 
-from core.async import get_reactor
+from squib.core.async import get_reactor
 
 ##############################################################################
 

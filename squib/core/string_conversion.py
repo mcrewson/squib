@@ -17,7 +17,7 @@ __all__ = [ 'ConversionError', 'convert_to_bool', 'convert_to_seconds',
 
 import re
 
-from baseobject import NonStdlibError
+from squib.core.baseobject import NonStdlibError
 
 ##############################################################################
 

@@ -9,8 +9,8 @@ A configuration file parser.
 
 import getopt, os, os.path, re, sys
 
-from core.baseobject        import BaseObject, NonStdlibError
-from core.string_conversion import convert_to_bool, convert_to_list
+from squib.core.baseobject        import BaseObject, NonStdlibError
+from squib.core.string_conversion import convert_to_bool, convert_to_list
 
 ##############################################################################
 
