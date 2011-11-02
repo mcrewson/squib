@@ -45,7 +45,7 @@ class SquibMain (Application):
         super(SquibMain, self).setup()
         self.configure_logging()
         self.configure_metrics_recorder()
-        self.configure_squibs()
+        self.configure_oxidizers()
         self.daemonize()
 
     def configure_logging (self):
@@ -74,9 +74,9 @@ class SquibMain (Application):
             hostname = hostname.split('.', 1)[0]
         self.metrics_recorder = metrics.MetricsRecorder(prefix='%s.' % hostname)
 
-    def configure_squibs (self):
+    def configure_oxidizers (self):
         self.controller = SquibController(self.metrics_recorder)
-        for sqname in self.config.read_nonconfig_section('squibs'):
+        for sqname in self.config.read_nonconfig_section('oxidizers'):
             sqname = sqname.strip()
             if not sqname or sqname.startswith('#'): continue
             try:
