@@ -214,10 +214,12 @@ class TrafficOxidizer (PeriodicOxidizer):
             self.prev_traf_stats[iface] = (rbytes, rpackets, rerrors, rdrops, 
                                            tbytes, tpackets, terrors, tdrops)
 
+            print 'traffic.%s.rraw %d'            % (iface, rs_diff * self.units)
             print 'traffic.%s.rsize meter +%d'    % (iface, rs_diff * self.units)
             print 'traffic.%s.rpackets meter +%d' % (iface, rp_diff)
             print 'traffic.%s.rerrors meter +%d'  % (iface, re_diff)
             print 'traffic.%s.rdrops meter +%d'   % (iface, rd_diff)
+            print 'traffic.%s.traw %d'            % (iface, ts_diff * self.units)
             print 'traffic.%s.tsize meter +%d'    % (iface, ts_diff * self.units)
             print 'traffic.%s.tpackets meter +%d' % (iface, tp_diff)
             print 'traffic.%s.terrors meter +%d'  % (iface, te_diff)
