@@ -9,10 +9,15 @@ Standard python logging extensions and configuration classes.
 
 __all__ = [ 'LoggingFactory', 'get_logger', ]
 
-import logging, new, types, traceback
+import errno, logging, new, os, time, types, traceback
 
 from squib.core.baseobject        import BaseObject
 from squib.core.string_conversion import convert_to_bool
+
+try:
+    import codecs
+except ImportError:
+    codecs = None
 
 ##############################################################################
 
@@ -100,7 +105,7 @@ class LoggingFactory (BaseObject):
             self.root_logger = logging.getLogger('')
             if self.file is not None:
                 formatter = logging.Formatter(self.format, self.datefmt)
-                handler = MultilineFileHandler(self.file, 'a')
+                handler = MyFileHandler(self.file, 'a')
                 handler.setFormatter(formatter)
                 self.root_logger.addHandler(handler)
             else:
@@ -139,7 +144,7 @@ class LoggingFactory (BaseObject):
         if name is not None:
             logfile = config.get('file', None)
             if logfile is not None:
-                handler = MultilineFileHandler(logfile, 'a')
+                handler = MyFileHandler(logfile, 'a')
                 format = config.get('format', self.root_format)
                 datefmt = config.get('datefmt', self.root_datefmt)
                 formatter = logging.Formatter(format, datefmt)
@@ -179,16 +184,58 @@ class DevnullHandler (logging.Handler):
     def handle (self, record):
         pass
 
-class MultilineFileHandler (logging.FileHandler):
+class MyFileHandler (logging.StreamHandler):
+
+    checkperiod = 10  # seconds
 
     def __init__ (self, filename, mode='a', encoding=None):
+        if codecs is None:
+            encoding = None
+        self.baseFilename = os.path.abspath(filename)
+        self.mode = mode
+        self.encoding = encoding
+        super(MyFileHandler, self).__init__(self._open())
+
+    def close (self):
+        if self.stream:
+            try:
+                self.flush()
+            except ValueError:
+                pass
+            if hasattr(self.stream, 'close'):
+                self.stream.close()
+            super(MyFileHandler, self).close()
+            self.stream = None
+
+    def _open (self):
+        if self.encoding is None:
+            stream = open(self.baseFilename, self.mode)
+        else:
+            stream = codecs.open(self.baseFilename, self.mode, self.encoding)
+        self.inode = os.stat(self.baseFilename).st_ino
+        self.lastcheck = time.time()
+        return stream
+
+    def _check (self):
+        now = time.time()
+        if self.lastcheck + self.checkperiod >= now:
+            return
+
         try:
-            logging.FileHandler.__init__(self, filename, mode, encoding)
-        except TypeError:
-            # support python2.3
-            logging.FileHandler.__init__(self, filename, mode)
+            inode = os.stat(self.baseFilename).st_ino
+        except OSError, err:
+            if err.errno != errno.ENOENT:
+                raise
+            # File was probably deleted.
+            inode = None
+
+        if inode != self.inode:
+            self.close()
+            self.stream = self._open()
+        self.lastcheck = now
 
     def emit (self, record):
+        self._check()
         try:
             msg = self.format(record)
             if msg.endswith('\n'):
