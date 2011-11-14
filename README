@@ -4,5 +4,5 @@ Squib
 Squib is a small metrics gathering and reporting tool. It uses a multi-process
 model to separate the metrics gathering from the reporting.
 
-Squib is writtenin Python, and has been testing using Python v2.3, v2.4, and v2.7
+Squib is written in Python, and has been testing using Python v2.3, v2.4, and v2.7
 
