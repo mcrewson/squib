@@ -7,9 +7,10 @@
 import os, re, signal, sys, tempfile, time
 
 from squib.core.application       import Application
+from squib.core.async             import free_reactor
 from squib.core.config            import ConfigError
 from squib.core.log               import get_logger
-from squib.core.multiproc         import ParentController
+from squib.core.multiproc         import ParentController, ParentStates
 from squib.core.string_conversion import convert_to_bool, ConversionError
 
 from squib import metrics, oxidizer, reporter, statistics, utility
@@ -110,6 +111,13 @@ class SquibMain (Application):
                     utility.daemonize()
             except ConversionError:
                 raise ConfigError("nodaemon must be a boolean")
+
+    def start (self):
+        while 1:
+            super(SquibMain, self).start()
+            if self.controller.state < ParentStates.RESTARTING:
+                break
+            free_reactor()
 
     def run (self):
         self.log.info("%s %s STARTED" % (self.app_name, self.app_version))

@@ -802,7 +802,8 @@ class KqueueReactor (Reactor):
 def get_reactor ():
     global __the_reactor
     try:
-        return __the_reactor
+        if __the_reactor is not None:
+            return __the_reactor
     except NameError:
         pass
 
@@ -822,6 +823,10 @@ def set_reactor (reactor):
     assert isinstance(reactor, Reactor), "Must be an instance of Reactor"
     __the_reactor = reactor
     return
+
+def free_reactor ():
+    global __the_reactor
+    __the_reactor = None
 
 ##############################################################################
 

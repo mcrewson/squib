@@ -27,10 +27,10 @@ class ParentController (BaseObject):
     def __init__ (self, **kw):
         super(ParentController, self).__init__(**kw)
         self._parse_options(ParentController.options, kw)
+        self.log = get_logger()
         self.children = []
         self.stopping = False
         self.stopping_children = None
-        self.log = get_logger()
 
     #### SETUP AND CLEANUP ################################################
 
@@ -77,14 +77,17 @@ class ParentController (BaseObject):
         if self.state < ParentStates.RUNNING:
             self.handle_shutdown_1()
 
+        self.handle_child_states()
         self.handle_reap()
         self.handle_signal()
-        self.handle_child_states()
 
         if self.state < ParentStates.RUNNING:
             self.handle_shutdown_2()
 
         self.reactor.call_later(self.housekeeping_period, self.housekeeping)
+
+    def handle_child_states (self):
+        [ child.do_state_transition() for child in self.children ]
 
     def handle_reap (self, once=False):
         pid, sts = _waitpid()
@@ -109,15 +112,8 @@ class ParentController (BaseObject):
             elif sig == signal.SIGCHLD:
                 self.log.debug("Received %s indicating a child quit" % _signame(sig))
 
-            elif sig == signal.SIGUSR2:
-                self.log.info("Received %s indicating log reopen request" % _signame(sig))
-                self.log.warn("TODO: implement log reopen")
-
             else:
                 self.log.moreinfo("Received %s signal. Ignored." % _signame(sig))
-
-    def handle_child_states (self):
-        [ child.do_state_transition() for child in self.children ]
 
     def handle_shutdown_1 (self):
         if not self.stopping:
