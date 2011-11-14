@@ -153,6 +153,14 @@ class ParentController (BaseObject):
                 # stopping_children queue
                 self.stopping_children.append(child)
 
+    #### Process Reporting ##################################################
+
+    def is_running (self):
+        return self.state >= ParentStates.RUNNING
+
+    def should_shutdown (self):
+        return self.state < ParentStates.RESTARTING
+
 #############################################################################
 
 class ChildStates:

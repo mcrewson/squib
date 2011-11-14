@@ -157,7 +157,7 @@ class SquibMain (Application):
     def start (self):
         while 1:
             super(SquibMain, self).start()
-            if self.controller.state < ParentStates.RESTARTING:
+            if self.controller.should_shutdown():
                 break
             free_reactor()
 
