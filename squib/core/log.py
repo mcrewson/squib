@@ -205,7 +205,7 @@ class MyFileHandler (logging.StreamHandler):
         self.baseFilename = os.path.abspath(filename)
         self.mode = mode
         self.encoding = encoding
-        super(MyFileHandler, self).__init__(self._open())
+        logging.StreamHandler.__init__(self, self._open())
 
     def close (self):
         if self.stream:
@@ -215,7 +215,7 @@ class MyFileHandler (logging.StreamHandler):
                 pass
             if hasattr(self.stream, 'close'):
                 self.stream.close()
-            super(MyFileHandler, self).close()
+            logging.StreamHandler.close(self)
             self.stream = None
 
     def _open (self):
