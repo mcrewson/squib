@@ -99,6 +99,7 @@ class Application (BaseObject):
 
             self.setup()
             self.run()
+            self.cleanup()
             return
 
         except KeyboardInterrupt:
@@ -116,6 +117,9 @@ class Application (BaseObject):
         pass
 
     def setup (self):
+        pass
+
+    def cleanup (self):
         pass
 
     def run (self):

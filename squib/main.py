@@ -44,6 +44,11 @@ class SquibMain (Application):
         self.configure_reporter()
         self.configure_oxidizers()
         self.daemonize()
+        self.write_pid()
+
+    def cleanup (self):
+        self.remove_pid()
+        super(SquibMain, self).cleanup()
 
     def configure_logging (self):
         logfile = self.config.get('common::logfile', '%s.log' % self.app_name)
@@ -111,6 +116,32 @@ class SquibMain (Application):
                     utility.daemonize()
             except ConversionError:
                 raise ConfigError("nodaemon must be a boolean")
+
+    def write_pid (self):
+        pid_file = self.config.get('common::pid_file')
+        if pid_file is None:
+            self.pid_file = None
+            return
+
+        self.pid_file = os.path.abspath(pid_file)
+        try:
+            self.log.debug("Writing pid file: %s" % self.pid_file)
+            f = open(self.pid_file, 'w')
+            f.write('%d\n' % os.getpid())
+            f.close()
+        except (IOError, OSError), why:
+            self.log.error("Cannot write pid file: %s" % str(why))
+            raise ConfigError("Cannot write pid file: %s" % self.pid_file)
+
+    def remove_pid (self):
+        if self.pid_file is not None:
+            try:
+                self.log.debug("Removing pid file: %s" % self.pid_file)
+                os.unlink(self.pid_file)
+            except OSError, why:
+                self.log.debug("Cannot remove pid file: %s" % str(why))
+
+    #### PROCESS CONTROL #####################################################
 
     def start (self):
         while 1:
