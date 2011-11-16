@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os, sys, time
+import os, re, sys, time
 
 from squib.core.config            import ConfigError
 from squib.core.string_conversion import convert_to_bool, ConversionError
@@ -140,19 +140,37 @@ class TrafficOxidizer (PeriodicOxidizer):
 
     def setup (self):
         super(TrafficOxidizer, self).setup()
-        self.setup_loopback()
+        self.setup_interfaces()
         self.setup_units()
         self.prev_traf_stats = {}
 
-    def setup_loopback (self):
-        loopback = self.config.get('include_loopback')
-        if loopback is None:
-            self.include_loopback = self.default_include_loopback
+    def setup_interfaces (self):
+        physical_only = self.config.get('physical_interfaces_only')
+        if physical_only is None:
+            self.physical_only = True
         else:
             try:
-                self.include_loopback = convert_to_bool(loopback)
+                self.physical_only = convert_to_bool(physical_only)
             except ConversionError:
-                raise ConfigError('%s::include_loopback must be a boolean' % self.name)
+                raise ConfigError('%s::physical_interfaces_only must be a boolean' % self.name)
+
+        exclude_rex = self.config.get('exclude_interfaces')
+        if exclude_rex is None:
+            self.exclude_rex = None
+        else:
+            try:
+                self.exclude_rex = re.compile(exclude_rex)
+            except Exception, why:
+                raise ConfigError('%s::exclude_interfaces must be a valid regular expression' % self.name)
+
+        include_rex = self.config.get('include_interfaces')
+        if include_rex is None:
+            self.include_rex = None
+        else:
+            try:
+                self.include_rex = re.compile(include_rex)
+            except Exception, why:
+                raise ConfigError('%s::include_interfaces must be a valid regular expression' % self.name)
 
     def setup_units (self):
         units = self.config.get('units')
@@ -179,6 +197,21 @@ class TrafficOxidizer (PeriodicOxidizer):
             self.units = 1.0 / (1024 * 1024 * 1024)
         else:
             raise ConfigError('%s::units must be one of: bits,kbits,mbits,gbits,bytes,kbytes,mbytes,gbytes' % self.name)
+
+    def should_track_interface (self, iface):
+        if self.physical_only and (iface == 'lo' or 
+                                   iface.startswith('bond') or
+                                   iface.startswith('sit') or 
+                                   iface.startswith('tun')):
+            return False
+
+        if self.include_rex and self.include_rex.search(iface) is None:
+            return False
+
+        if self.exclude_rex and self.exclude_rex.search(iface) is not None:
+            return False
+
+        return True
 
     def run_once (self):
         f = open('/proc/net/dev', 'r')
@@ -207,36 +240,22 @@ class TrafficOxidizer (PeriodicOxidizer):
                 terrors = int(parts[10], 10)
                 tdrops = int(parts[11], 10)
 
-            if iface == 'lo' and not self.include_loopback: 
+            if not self.should_track_interface(iface):
                 continue
 
-            prev = self.prev_traf_stats.get(iface)
-            if prev is None:
-                self.prev_traf_stats[iface] = (rbytes, rpackets, rerrors, rdrops, 
-                                               tbytes, tpackets, terrors, tdrops)
-                continue
-            
-            rs_diff = rbytes - prev[0]
-            rp_diff = rpackets - prev[1]
-            re_diff = rerrors - prev[2]
-            rd_diff = rdrops - prev[3]
-            ts_diff = tbytes - prev[4]
-            tp_diff = tpackets - prev[5]
-            te_diff = terrors - prev[6]
-            td_diff = tdrops - prev[7]
-            self.prev_traf_stats[iface] = (rbytes, rpackets, rerrors, rdrops, 
-                                           tbytes, tpackets, terrors, tdrops)
+            runits = rbytes * self.units
+            tunits = tbytes * self.units
 
-            print 'traffic.%s.rraw %d'            % (iface, rs_diff * self.units)
-            print 'traffic.%s.rsize meter +%d'    % (iface, rs_diff * self.units)
-            print 'traffic.%s.rpackets meter +%d' % (iface, rp_diff)
-            print 'traffic.%s.rerrors meter +%d'  % (iface, re_diff)
-            print 'traffic.%s.rdrops meter +%d'   % (iface, rd_diff)
-            print 'traffic.%s.traw %d'            % (iface, ts_diff * self.units)
-            print 'traffic.%s.tsize meter +%d'    % (iface, ts_diff * self.units)
-            print 'traffic.%s.tpackets meter +%d' % (iface, tp_diff)
-            print 'traffic.%s.terrors meter +%d'  % (iface, te_diff)
-            print 'traffic.%s.tdrops meter +%d'   % (iface, td_diff)
+            print 'traffic.%s.rtraffic derivgauge %d' % (iface, runits)
+            print 'traffic.%s.rtraffic derivmeter %d' % (iface, runits)
+            print 'traffic.%s.rpackets derivgauge %d' % (iface, rpackets)
+            print 'traffic.%s.rerrors derivgauge %d'  % (iface, rerrors)
+            print 'traffic.%s.rdrops derivgauge %d'   % (iface, rdrops)
+            print 'traffic.%s.ttraffic derivgauge %d' % (iface, tunits)
+            print 'traffic.%s.ttraffic derivmeter %d' % (iface, tunits)
+            print 'traffic.%s.tpackets derivgauge %d' % (iface, tpackets)
+            print 'traffic.%s.terrors derivgauge %d'  % (iface, terrors)
+            print 'traffic.%s.tdrops derivgauge %d'   % (iface, tdrops)
             sys.stdout.flush()
 
 ##############################################################################
