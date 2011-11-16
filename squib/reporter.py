@@ -107,10 +107,13 @@ class GraphiteReporter (BaseReporter):
         lines = self.metrics_recorder.publish()
         message = '\n'.join(lines) + '\n'
 
-        sock = SocketReactable(addr=(self.graphite_server, self.graphite_port))
-        sock.create_socket()
-        sock.write_data(message)
-        sock.close_when_done()
+        try:
+            sock = SocketReactable(addr=(self.graphite_server, self.graphite_port))
+            sock.create_socket()
+            sock.write_data(message)
+            sock.close_when_done()
+        except socket.error, why:
+            self.log.warn('Failed to report to graphite: %s' % str(why))
 
 ##############################################################################
 ## THE END
