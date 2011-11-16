@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import math
+import heapq, math, random, time
 
 from squib.core.async import get_reactor
 
@@ -76,6 +76,121 @@ def ewma_decay ():
 
 def schedule_ewma_decay ():
     get_reactor().call_later(EWMA_DECAY_INTERVAL, ewma_decay)
+
+##############################################################################
+
+class Sample (object):
+
+    def __init__ (self, reservoirSize):
+        self.reservoirSize = reservoirSize
+        self.count = 0
+
+    def update (self, value):
+        pass
+
+    def values (self):
+        pass
+
+    def percentiles (self, *percentiles):
+        scores = [ 0.0 for p in percentiles ]
+        if self.count > 0:
+            values = self.values()
+            values.sort()
+            for i in range(len(percentiles)):
+                p = percentiles[i]
+                pos = p * (len(values) + 1)
+                if pos < 1:
+                    scores[i] = values[0]
+                elif pos >= len(values):
+                    scores[i] = values[-1]
+                else:
+                    lower = values[int(pos) - 1]
+                    upper = values[int(pos)]
+                    scores[i] = lower + (pos - math.floor(pos)) * (upper - lower)
+        return scores
+
+class UniformSample (Sample):
+
+    def __init__ (self, reservoirSize):
+        super(UniformSample, self).__init__(reservoirSize)
+        self.reservoir = [0] * self.reservoirSize
+
+    def update (self, value):
+        self.count += 1
+        if self.count <= self.reservoirSize:
+            self.reservoir[self.count - 1] = value
+        else:
+            r = random.randint(0, self.count -1)
+            if r < self.reservoirSize:
+                self.reservoir[r] = value
+
+    def values (self):
+        if self.count > self.reservoirSize:
+            return self.reservoir[:]
+        else:
+            return self.reservoir[:self.count]
+
+class ExponentiallyDecayingSample (Sample):
+
+    rescale_threshold = 60 * 60 # 1 hour
+
+    def __init__ (self, reservoirSize, alpha):
+        super(ExponentiallyDecayingSample, self).__init__(reservoirSize)
+        self.alpha = alpha
+        self.reservoir = []
+        self.starttime = int(time.time())
+        self.next_rescale_time = self.starttime + ExponentiallyDecayingSample.rescale_threshold
+
+    def update (self, value):
+        now = int(time.time())
+        priority = math.exp(self.alpha * (now - self.starttime)) / random.random()
+        val = (priority, value)
+        self.count += 1
+        if self.count <= self.reservoirSize:
+            self.reservoir.append(val)
+        else:
+            first = self.reservoir[0][0]
+            if first < priority:
+                self.reservoir.append(val)
+                del self.reservoir[0]
+        self.reservoir.sort()
+
+        if now > self.next_rescale_time:
+            self.rescale(now)
+
+    def rescale (self, now):
+        self.next_rescale_time = now + ExponentiallyDecayingSample.rescale_threshold
+        new_reservoir = []
+        old_starttime = self.starttime
+        self.starttime = now
+        for priority,value in self.reservoir:
+            new_reservoir.append((priority * math.exp(-self.alpha * (self.starttime - old_starttime)), value))
+        self.reservoir = new_reservoir
+
+    def values (self):
+        if self.count > self.reservoirSize:
+            return [ v for p,v in self.reservoir ]
+        else:
+            return [ v for p,v in self.reservoir[:self.count] ]
+
+    def dump (self):
+        print "count = %d, reservoirSize = %d" % (self.count, self.reservoirSize)
+        if self.count > self.reservoirSize:
+            for p,v in self.reservoir:
+                print "%2.2f ... %s" % (p, v)
+        else:
+            for p,v in self.reservoir[:self.count]:
+                print "%2.2f ... %s" % (p, v)
+
+
+def one_minute_eds ():
+    return ExponentiallyDecayingSample(1028, M1_ALPHA)
+
+def five_minute_eds ():
+    return ExponentiallyDecayingSample(1028, M5_ALPHA)
+
+def fifteen_minute_eds ():
+    return ExponentiallyDecayingSample(1028, M15_ALPHA)
 
 ##############################################################################
 ## THE END
