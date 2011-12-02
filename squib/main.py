@@ -24,7 +24,7 @@ from squib.core.log               import get_logger
 from squib.core.multiproc         import ParentController, ParentStates
 from squib.core.string_conversion import convert_to_bool, ConversionError
 
-from squib import metrics, oxidizer, reporter, statistics, utility
+from squib import metrics, oxidizer, reporter, selfstats, statistics, utility
 
 ##############################################################################
 
@@ -54,6 +54,7 @@ class SquibMain (Application):
         self.configure_metrics_recorder()
         self.configure_reporter()
         self.configure_oxidizers()
+        self.configure_selfstats()
         self.daemonize()
         self.write_pid()
 
@@ -118,6 +119,10 @@ class SquibMain (Application):
             except ConfigError, err:
                 self.log.warn(str(err))
                 self.log.warn("Invalid oxidizer named \"%s\". Ignored" % (ox))
+
+    def configure_selfstats (self):
+        self.selfstats = selfstats.SelfStatistics(self.config, self.metrics_recorder)
+        self.metrics_recorder.set_selfstats(self.selfstats)
 
     def daemonize (self):
         nodaemon = self.nodaemon

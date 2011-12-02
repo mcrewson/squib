@@ -39,6 +39,10 @@ class MetricsRecorder (object):
         self.log = get_logger()
         self.prefix = prefix
         self.all_metrics = {}
+        self.selfstats = None
+
+    def set_selfstats (self, selfstats):
+        self.selfstats = selfstats
 
     def record (self, name, value):
         mtype, mtype_args, pvalue = self.parse_value(value)
@@ -64,9 +68,11 @@ class MetricsRecorder (object):
 
             self.all_metrics[full_name] = m
 
-        #elif isinstance(m, InvalidMetric):
-        #    return
+        elif isinstance(m, InvalidMetric):
+            return
 
+        if self.selfstats is not None:
+            self.selfstats.mark_metrics_record()
         m.update(pvalue)
 
     def parse_value (self, value_string):
@@ -104,6 +110,8 @@ class MetricsRecorder (object):
         return mtype, mtype_args, ' '.join(value_parts[1:])
 
     def publish (self):
+        if self.selfstats is not None:
+            self.selfstats.mark_metrics_report()
         epoch = int(time.time())
         lines = []
         allm = self.all_metrics.values()[:]
