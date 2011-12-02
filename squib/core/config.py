@@ -213,10 +213,8 @@ class Config (BaseObject):
         else:
             self.conf = dict(DEFAULT=dict(self.base_config_dict))
         for filename in self.filenames:
-            self._log("Loading config file: %s\n" % filename)
             configFilename = self._find_config_file(filename)
             if configFilename is None: 
-                self._log("%s does not exist. Skipping...\n" % filename)
                 continue
 
             fp = open(configFilename, 'r')

@@ -17,11 +17,12 @@
 
 __all__ = [ 'Application', 'get_app', ]
 
-import logging, signal, sys, traceback
+import signal, sys, traceback
 
 from squib.core.async             import get_reactor
 from squib.core.baseobject        import BaseObject, NonStdlibError
 from squib.core.config            import Config, ConfigError
+from squib.core.log               import configure as configurelog, getlog
 from squib.core.string_conversion import convert_to_floating
 
 #############################################################################
@@ -47,8 +48,8 @@ def get_app ():
 def _except_hook (exc_type, value, tb):
     global _app_name, _app_version
 
-    log = logging.getLogger()
-    if log is not None and log.handlers:
+    try:
+        log = getlog()
         log.critical('Exception: please include the following information '
                      'in any bug report:')
         log.critical('  %s version %s' % (_app_name, _app_version))
@@ -66,7 +67,7 @@ def _except_hook (exc_type, value, tb):
         log.critical('Please also include configuration information from '
                      'running %s' % _app_name)
         log.critical('with your normal options plus \'--dump\'')
-    else:
+    except:
         traceback.print_exception(exc_type, value, tb)
 
 class Application (BaseObject):
@@ -83,8 +84,6 @@ class Application (BaseObject):
     def __init__ (self, **kw):
         """constructor"""
         super(Application, self).__init__()
-        if not kw.has_key('logger'):
-            kw['logger'] = logging.getLogger()
         self._parse_options(Application.options, kw)
 
         if hasattr(self, 'config_files'):
@@ -108,6 +107,12 @@ class Application (BaseObject):
                                  short_arguments=self.short_cmdline_args,
                                  long_arguments=self.long_cmdline_args,
                                  command_line_handler=self.cmdline_handler)
+
+            # Default logging setup, if there is a 'logging' section in
+            # the configuration file. Otherwise you are on your own to
+            # setup the logging subsystem
+            if 'logging' in self.config.get_sections():
+                configurelog(self.config)
 
             self.setup()
             self.run()

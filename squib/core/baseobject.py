@@ -16,7 +16,7 @@
 
 """
 Base object class for many classes. Provides standard class configuration
-and logging utility methods often needed.
+utility methods often needed.
 """
 
 __all__ = [ "BaseObject", ]
@@ -43,9 +43,7 @@ class InvalidParameter (BaseObjectError):
 
 class BaseObject (object):
 
-    options = { 'logger'       : None,
-                'logger_level' : 'debug',
-              }
+    options = {}
 
     def __init__ (self, **kw):
         super(BaseObject, self).__init__()
@@ -71,24 +69,6 @@ class BaseObject (object):
                     raise InvalidParameter("The parameter '%s.%s=%s' cannot be type converted: %s" % (self.__class__, key, value, e))
 
             self.__dict__[key] = value
-
-    def _log (self, message):
-        if self.logger is None: return
-
-        if hasattr(self, '__logger_log'):
-            self.__logger_log(message)
-        elif hasattr(self, '__logger_write'):
-            self.__logger_write(message + '\n')
-        else:
-            if hasattr(self.logger, self.logger_level):
-                self.__logger_log = eval('self.logger.%s' % self.logger_level)
-                self.__logger_log(message)
-            elif hasattr(self.logger, 'write'):
-                self.__logger_write = self.logger.write
-                self.__loger_write(message + '\n')
-            else:
-                # Logger is unrecognizable. Ignore it
-                self.logger = None
 
 ##############################################################################
 ## THE END

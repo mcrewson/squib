@@ -18,11 +18,12 @@
 Standard python logging extensions and configuration classes.
 """
 
-__all__ = [ 'LoggingFactory', 'get_logger', ]
+__all__ = [ 'configure', 'getlog' ]
 
 import errno, logging, new, os, time, types, traceback
 
 from squib.core.baseobject        import BaseObject
+from squib.core.config            import Config
 from squib.core.string_conversion import convert_to_bool
 
 try:
@@ -85,22 +86,10 @@ class LoggingFactory (BaseObject):
                 'enabled'        : (True, convert_to_bool),
               }
 
-    def __init__ (self, config=None, **kw):
+    def __init__ (self, **kw):
         super(LoggingFactory, self).__init__()
         self._parse_options(LoggingFactory.options, kw)
-        if config is not None:
-            self.file           = config.get('file', None)
-            self.level          = config.get('level', self.DEFAULT_LEVEL)
-            self.format         = config.get('format', self.DEFAULT_FORMAT)
-            self.datefmt        = config.get('datefmt', self.DEFAULT_DATEFMT)
-            self.console        = convert_to_bool(config.get('console', False))
-            self.console_level  = config.get('console_level', self.DEFAULT_CONSOLE_LEVEL)
-            self.console_format = config.get('console_format', self.DEFAULT_CONSOLE_FORMAT)
-            self.console_datefmt = config.get('console_datefmt', self.DEFAULT_CONSOLE_DATEFMT)
-            self.enabled        = config.get('enabled', True)
-
         self.is_setup = False
-
         self.setup()
         self.loggers = dict()
 
@@ -270,13 +259,17 @@ class MyFileHandler (logging.StreamHandler):
 
 __logging_factory = None
 
-def get_logger (name=None, config=None, **kw):
+def configure (config):
     global __logging_factory
-    if config is not None:
-        __logging_factory = LoggingFactory(config, **kw)
-    elif __logging_factory is None:
-        __logging_factory = LoggingFactory(**kw)
-    return __logging_factory.get_logger(name)
+    if isinstance(config, Config):
+        config = config.section('logging')
+    __logging_factory = LoggingFactory(**config)
+
+def getlog (name=None, config=None):
+    global __logging_factory
+    if __logging_factory is None:
+        return logging
+    return __logging_factory.get_logger(name, config)
 
 ##############################################################################
 ## THE END

@@ -20,7 +20,7 @@ import os, re, signal, sys, tempfile, time
 from squib.core.application       import Application
 from squib.core.async             import free_reactor
 from squib.core.config            import ConfigError
-from squib.core.log               import get_logger
+from squib.core.log               import getlog
 from squib.core.multiproc         import ParentController, ParentStates
 from squib.core.string_conversion import convert_to_bool, ConversionError
 
@@ -36,11 +36,9 @@ class SquibMain (Application):
     long_cmdline_args = [ 'nodaemon', ]
 
     def __init__ (self, **kw):
-        #self.config_files = self.centralconf_update()
         super(SquibMain, self).__init__(**kw)
-        self.prelog_error_messages = []
-        self.prelog_info_messages = []
         self.nodaemon = False
+        self.pid_file = None
 
     def cmdline_handler (self, argument, value):
         if argument in ('--nodaemon'):
@@ -50,7 +48,7 @@ class SquibMain (Application):
 
     def setup (self):
         super(SquibMain, self).setup()
-        self.configure_logging()
+        self.log = getlog()
         self.configure_metrics_recorder()
         self.configure_reporter()
         self.configure_oxidizers()
@@ -61,26 +59,6 @@ class SquibMain (Application):
     def cleanup (self):
         self.remove_pid()
         super(SquibMain, self).cleanup()
-
-    def configure_logging (self):
-        logfile = self.config.get('common::logfile', '%s.log' % self.app_name)
-        if logfile.lower() == '__none__': 
-            self.log = get_logger()
-            return
-        logcfg = dict(file=logfile)
-        logcfg['level'] = self.config.get('common::loglevel', 'INFO')
-        logcfg['console'] = self.config.get('common::console', 'True')
-        logcfg['console_level'] = self.config.get('common::console_loglevel', 'WARNING')
-        try:
-            self.log = get_logger(config=logcfg)
-        except IOError, e:
-            self.abort("Cannot open log file: %s" % e)
-
-        self.log.info("%s %s INITIALIZING" % (self.app_name, self.app_version))
-        for msg in self.prelog_error_messages:
-            self.log.error(msg)
-        for msg in self.prelog_info_messages:
-            self.log.info(msg)
 
     def configure_metrics_recorder (self):
         hostname = utility.calculate_hostname()
@@ -136,7 +114,6 @@ class SquibMain (Application):
     def write_pid (self):
         pid_file = self.config.get('common::pid_file')
         if pid_file is None:
-            self.pid_file = None
             return
 
         self.pid_file = os.path.abspath(pid_file)

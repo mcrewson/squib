@@ -19,7 +19,7 @@ import socket
 from squib.core.async             import SocketReactable
 from squib.core.baseobject        import BaseObject
 from squib.core.config            import ConfigError
-from squib.core.log               import get_logger
+from squib.core.log               import getlog
 from squib.core.string_conversion import convert_to_integer, convert_to_seconds, ConversionError
 
 ##############################################################################
@@ -33,7 +33,7 @@ class BaseReporter (BaseObject):
         #self._parse_options(BaseReporter.options, kw)
         self.reporter_config = reporter_config
         self.metrics_recorder = metrics_recorder
-        self.log = get_logger()
+        self.log = getlog()
         self.setup()
 
     def setup (self):

@@ -16,7 +16,7 @@
 
 from squib.core.async     import ReadOnlyFileDescriptorReactable
 from squib.core.config    import ConfigError
-from squib.core.log       import get_logger
+from squib.core.log       import getlog
 from squib.core.multiproc import ChildController
 from squib.oxidizers.base import BasePythonOxidizer
 
@@ -114,7 +114,7 @@ class ErrorReporter (ReadOnlyFileDescriptorReactable):
 
     def __init__ (self, fd=None, reactor=None):
         ReadOnlyFileDescriptorReactable.__init__(self, fd, reactor)
-        self.log = get_logger()
+        self.log = getlog()
 
     def on_data_read (self, data):
         self.log.error(data)

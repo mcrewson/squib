@@ -18,7 +18,7 @@ import math, platform, time
 
 from squib                        import statistics
 from squib.core.baseobject        import NonStdlibError
-from squib.core.log               import get_logger
+from squib.core.log               import getlog
 from squib.core.string_conversion import ConversionError, convert_to_integer
 
 ##############################################################################
@@ -36,7 +36,7 @@ else:
 class MetricsRecorder (object):
 
     def __init__ (self, prefix=""):
-        self.log = get_logger()
+        self.log = getlog()
         self.prefix = prefix
         self.all_metrics = {}
         self.selfstats = None
@@ -127,7 +127,7 @@ class BaseMetric (object):
     def __init__ (self, name, *args):
         self.name = name
         self.parse_args(args)
-        self.log = get_logger()
+        self.log = getlog()
 
     def __cmp__ (self, other):
         return cmp(self.name, other.name)

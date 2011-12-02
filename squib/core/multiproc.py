@@ -16,11 +16,11 @@
 
 __all__ = [ 'ParentController', 'ChildController' ]
 
-import errno, fcntl, logging, os, signal, sys, time, traceback
+import errno, fcntl, os, signal, sys, time, traceback
 
 from squib.core.async             import get_reactor
 from squib.core.baseobject        import BaseObject, NonStdlibError
-from squib.core.log               import get_logger
+from squib.core.log               import getlog
 from squib.core.string_conversion import convert_to_floating
 
 ##############################################################################
@@ -38,7 +38,7 @@ class ParentController (BaseObject):
     def __init__ (self, **kw):
         super(ParentController, self).__init__(**kw)
         self._parse_options(ParentController.options, kw)
-        self.log = get_logger()
+        self.log = getlog()
         self.children = []
         self.stopping = False
         self.stopping_children = None
@@ -194,7 +194,7 @@ class ChildController (object):
         self.state = ChildStates.STOPPED
         self.pipes = {}
         self.reactables = []
-        self.log = get_logger()
+        self.log = getlog()
 
         self.priority = 999
         self.startsecs = 1
@@ -531,9 +531,9 @@ def _waitpid ():
     except OSError, why:
         err = why[0]
         if errno in (errno.ECHILD, errno.EINTR):
-            logging.critical("waitpid error; a process may not be cleaned up properly")
+            getlog().critical("waitpid error; a process may not be cleaned up properly")
         if err == errno.EINTR:
-            logging.debug("EINTR during reap")
+            getlog().debug("EINTR during reap")
         pid, sts = None, None
     return pid, sts
 

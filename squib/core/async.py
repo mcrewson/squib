@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import errno, fcntl, heapq, logging, os, select, socket, sys, time
+import errno, fcntl, heapq, os, select, socket, sys, time
 
 try:
     from collections import deque
@@ -27,6 +27,8 @@ try:
     ssl_supported = True
 except ImportError:
     ssl_supported = False
+
+from squib.core.log import getlog
 
 ##############################################################################
 
@@ -125,13 +127,13 @@ class Reactable (object):
     ##############################################
 
     def handle_read (self):
-        logging.warning("Unhandled reactable read event")
+        getlog().warning("Unhandled reactable read event")
 
     def handle_write (self, data):
-        logging.warning("Unhandled reactable write event")
+        getlog().warning("Unhandled reactable write event")
 
     def handle_close (self):
-        logging.warning("Unhandled reactable close event")
+        getlog().warning("Unhandled reactable close event")
         
     def handle_error (self):
         try:
@@ -144,7 +146,7 @@ class Reactable (object):
         tbinfo = '[%s|%s|%s]' % (tb.tb_frame.f_code.co_filename,
                                  tb.tb_frame.f_code.co_name,
                                  str(tb.tb_lineno))
-        logging.warning("Unhandled python exception: %s (%s:%s %s)" % (self_repr, t, v, tbinfo))
+        getlog().warning("Unhandled python exception: %s (%s:%s %s)" % (self_repr, t, v, tbinfo))
 
 ##############################################################################
 
@@ -661,7 +663,7 @@ class Reactor (object):
             except _reraised_exceptions:
                 raise
             except:
-                logging.exception("CallLater failed")
+                getlog().exception("CallLater failed")
 
         if (self._cancellations > 50 and
             self._cancellations > len(self._pending_timed_calls) >> 1):
