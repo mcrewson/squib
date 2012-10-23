@@ -71,49 +71,63 @@ class SimpleLogReporter (BaseReporter):
 
 ##############################################################################
 
-class GraphiteReporter (BaseReporter):
+class TcpReporter (BaseReporter):
 
-    default_graphite_server = 'localhost'
-    default_graphite_port   = 2003
+    default_destination_addr = None
+    default_destination_port = None
 
     def setup (self):
-        super(GraphiteReporter, self).setup()
-        self.setup_graphite()
+        super(TcpReporter, self).setup()
+        self.setup_address()
 
-    def setup_graphite (self):
-        graphite_server = self.reporter_config.get('graphite_server')
-        if graphite_server is None:
-            self.log.warning('no graphite_server specified for GraphiteReporter. Using default: %s' 
-                             % GraphiteReporter.default_graphite_server)
-            self.graphite_server = GraphiteReporter.default_graphite_server
+    def setup_address (self):
+        destination_addr = self.reporter_config.get('destination_addr')
+        if destination_addr is None:
+            if self.default_destination_addr is not None:
+                self.log.warning('no destination_addr specified for TcpReporter. Using default: %s'
+                                 % self.default_destination_addr)
+                self.destination_addr = self.default_destination_addr
+            else:
+                raise ConfigError('reporter::destination_addr must be specified')
         else:
-            self.graphite_server = graphite_server
+            self.destination_addr = destination_addr
 
-        graphite_port = self.reporter_config.get('graphite_port')
-        if graphite_port is None:
-            self.log.debug('no graphite_port specified for GraphiteReporter. Using default: %s'
-                           % GraphiteReporter.default_graphite_port)
-            self.graphite_port = GraphiteReporter.default_graphite_port
+        destination_port = self.reporter_config.get('destination_port')
+        if destination_port is None:
+            if self.default_destination_port is not None:
+                self.log.warning('no destination_port specified for TcpReporter. Using default: %s'
+                                 % self.default_destination_port)
+                self.destination_port = self.default_destination_port
+            else:
+                raise ConfigError('reporter::destination_port must be specified')
         else:
             try:
-                self.graphite_port = convert_to_integer(graphite_port)
+                self.destination_port = convert_to_integer(destination_port)
             except ConversionError:
-                raise ConfigError('reporter::graphite_port mus be an integer number')
+                raise ConfigError('reporter::destination_port must be an integer number')
 
-        self.log.info('Reporting to graphite server: %s:%s' % (self.graphite_server,
-                                                               self.graphite_port))
+        self.log.info('Reporting to tcp address: %s:%s' % (self.destination_addr,
+                                                           self.destination_port))
 
     def send_report (self):
         lines = self.metrics_recorder.publish()
         message = '\n'.join(lines) + '\n'
-
         try:
-            sock = SocketReactable(addr=(self.graphite_server, self.graphite_port))
+            sock = SocketReactable(addr=(self.destination_addr, self.destination_port))
             sock.create_socket()
             sock.write_data(message)
             sock.close_when_done()
         except socket.error, why:
-            self.log.warn('Failed to report to graphite: %s' % str(why))
+            self.log.warn('Failed to send report: %s' % str(why))
+
+##############################################################################
+
+class GraphiteReporter (TcpReporter):
+    """Do not break old configurations..."""
+
+    default_graphite_server = 'localhost'
+    default_graphite_port   = 2003
+
 
 ##############################################################################
 ## THE END

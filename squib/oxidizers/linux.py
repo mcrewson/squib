@@ -246,16 +246,16 @@ class TrafficOxidizer (PeriodicOxidizer):
             runits = rbytes * self.units
             tunits = tbytes * self.units
 
-            print 'traffic.%s.rtraffic derivgauge %d' % (iface, runits)
-            print 'traffic.%s.rtraffic derivmeter %d' % (iface, runits)
-            print 'traffic.%s.rpackets derivgauge %d' % (iface, rpackets)
-            print 'traffic.%s.rerrors derivgauge %d'  % (iface, rerrors)
-            print 'traffic.%s.rdrops derivgauge %d'   % (iface, rdrops)
-            print 'traffic.%s.ttraffic derivgauge %d' % (iface, tunits)
-            print 'traffic.%s.ttraffic derivmeter %d' % (iface, tunits)
-            print 'traffic.%s.tpackets derivgauge %d' % (iface, tpackets)
-            print 'traffic.%s.terrors derivgauge %d'  % (iface, terrors)
-            print 'traffic.%s.tdrops derivgauge %d'   % (iface, tdrops)
+            print '%s.%s.rtraffic derivgauge %d' % (self.name, iface, runits)
+            print '%s.%s.rtraffic derivmeter %d' % (self.name, iface, runits)
+            print '%s.%s.rpackets derivgauge %d' % (self.name, iface, rpackets)
+            print '%s.%s.rerrors derivgauge %d'  % (self.name, iface, rerrors)
+            print '%s.%s.rdrops derivgauge %d'   % (self.name, iface, rdrops)
+            print '%s.%s.ttraffic derivgauge %d' % (self.name, iface, tunits)
+            print '%s.%s.ttraffic derivmeter %d' % (self.name, iface, tunits)
+            print '%s.%s.tpackets derivgauge %d' % (self.name, iface, tpackets)
+            print '%s.%s.terrors derivgauge %d'  % (self.name, iface, terrors)
+            print '%s.%s.tdrops derivgauge %d'   % (self.name, iface, tdrops)
             sys.stdout.flush()
 
 ##############################################################################

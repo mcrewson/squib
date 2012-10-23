@@ -99,8 +99,12 @@ class SquibMain (Application):
                 self.log.warn("Invalid oxidizer named \"%s\". Ignored" % (ox))
 
     def configure_selfstats (self):
-        self.selfstats = selfstats.SelfStatistics(self.config, self.metrics_recorder)
-        self.metrics_recorder.set_selfstats(self.selfstats)
+        try:
+            if convert_to_bool(self.config.get('common::selfstats', True)) == True:
+                self.selfstats = selfstats.SelfStatistics(self.config, self.metrics_recorder)
+                self.metrics_recorder.set_selfstats(self.selfstats)
+        except ConversionError:
+            raise ConfigError("noselfstats must be a boolean")
 
     def daemonize (self):
         nodaemon = self.nodaemon
