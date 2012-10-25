@@ -136,7 +136,6 @@ class TCPReactable (SocketReactable):
                 raise
             return 0
 
-##############################################################################
 
 class TCPListener (TCPReactable):
 
@@ -259,6 +258,7 @@ if ssl_supported == True:
                 return True
             return False
 
+
     class SSLServer (SSLReactable, TCPListener):
 
         def __init__ (self, address, cert, pkey,
@@ -296,7 +296,6 @@ class UDPReactable (SocketReactable):
                 raise
             return 0
 
-##############################################################################
 
 class UDPListener (UDPReactable):
 
@@ -311,7 +310,7 @@ class UDPListener (UDPReactable):
 
 ##############################################################################
 
-def MulticastReactable (UDPReactable):
+class MulticastReactable (UDPReactable):
     joined_group = False
 
     def on_join_group (self):
@@ -320,11 +319,11 @@ def MulticastReactable (UDPReactable):
     def on_leave_group (self):
         pass
 
-    def set_loopback_mode (self, mode)
+    def set_loopback_mode (self, mode):
         mode = struct.pack('b', mode)
         self.socket.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_LOOP, mode)
 
-    def set_ttl (self, ttl)
+    def set_ttl (self, ttl):
         ttl = struct.pack('B', ttl)
         self.socket.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, ttl)
 
@@ -340,7 +339,7 @@ def MulticastReactable (UDPReactable):
         super(MulticastReactable, self).handle_read_event()
 
     def handle_write_event (self):
-        if not self.joined_group():
+        if not self.joined_group:
             self.handle_join_group()
         super(MulticastReactable, self).handle_write_event()
 
@@ -366,8 +365,7 @@ def MulticastReactable (UDPReactable):
             cmd = socket.IP_ADD_MEMBERSHIP
         else:
             cmd = socket.IP_DROP_MEMBERSHIP
-        try:
-            self.socket.setsockopt(socket.IPPROTO_IP, cmd, addr + intf)
+        self.socket.setsockopt(socket.IPPROTO_IP, cmd, addr + intf)
 
 ##############################################################################
 
