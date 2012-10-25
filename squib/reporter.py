@@ -20,7 +20,7 @@ from squib.core.asyncnet          import TCPReactable, MulticastReactable
 from squib.core.baseobject        import BaseObject
 from squib.core.config            import ConfigError
 from squib.core.log               import getlog
-from squib.core.string_conversion import convert_to_integer, convert_to_seconds, ConversionError
+from squib.core.string_conversion import convert_to_bool, convert_to_integer, convert_to_seconds, ConversionError
 
 ##############################################################################
 
@@ -148,8 +148,26 @@ class MulticastReporter (BaseReporter):
             except ConversionError:
                 raise ConfigError('reporter::multicast_port must be an integer number')
 
+        self.multicast_ttl = self.reporter_config.get('multicast_ttl')
+        if self.multicast_ttl:
+            try:
+                self.multicast_ttl = convert_to_integer(self.multicast_ttl)
+            except ConversionError:
+                raise ConfigError('reporter::multicast_ttl must be an integer number')
+
+        self.multicast_loopback = self.reporter_config.get('multicast_loopback', True)
+        try:
+            self.multicast_loopback = convert_to_bool(self.multicast_loopback)
+        except ConversionError:
+            raise ConfigError('reporter::multicast_loopback must be a boolean')
+
+
         self.log.info('Reporting to multicast address:  %s:%s' % (self.multicast_addr,
                                                                   self.multicast_port))
+        if self.multicast_ttl is not None:
+            self.log.info('MulticastReporter will send reports beyond this network (multicast_ttl = %d)' % self.multicast_ttl)
+        if self.multicast_loopback == False:
+            self.log.info('MulticastReporter will NOT send reports to this machine (multicast_loopback = False)')
 
     def send_report (self):
         lines = self.metrics_recorder.publish()
@@ -158,6 +176,9 @@ class MulticastReporter (BaseReporter):
             address=(self.multicast_addr, self.multicast_port)
             sock = MulticastReactable(address)
             sock.create_socket()
+            if self.multicast_ttl:
+                sock.set_ttl(self.multicast_ttl)
+            sock.set_loopback_mode(self.multicast_loopback)
             sock.write_data(message)
             sock.close_when_done()
         except socket.error, why:
