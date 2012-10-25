@@ -16,7 +16,7 @@
 
 import socket
 
-from squib.core.async             import SocketReactable
+from squib.core.asyncnet          import TCPReactable, MulticastReactable
 from squib.core.baseobject        import BaseObject
 from squib.core.config            import ConfigError
 from squib.core.log               import getlog
@@ -113,14 +113,12 @@ class TcpReporter (BaseReporter):
         lines = self.metrics_recorder.publish()
         message = '\n'.join(lines) + '\n'
         try:
-            sock = SocketReactable(addr=(self.destination_addr, self.destination_port))
+            sock = TCPReactable(address=(self.destination_addr, self.destination_port))
             sock.create_socket()
             sock.write_data(message)
             sock.close_when_done()
         except socket.error, why:
             self.log.warn('Failed to send report: %s' % str(why))
-
-##############################################################################
 
 class GraphiteReporter (TcpReporter):
     """Do not break old configurations..."""
@@ -128,6 +126,42 @@ class GraphiteReporter (TcpReporter):
     default_graphite_server = 'localhost'
     default_graphite_port   = 2003
 
+##############################################################################
+
+class MulticastReporter (BaseReporter):
+
+    def setup (self):
+        super(MulticastReporter, self).setup()
+        self.setup_address()
+
+    def setup_address (self):
+        self.multicast_addr = self.reporter_config.get('multicast_addr')
+        if not self.multicast_addr:
+            raise ConfigError('reporter::multicast_addr must be specified')
+
+        self.multicast_port = self.reporter_config.get('multicast_port')
+        if not self.multicast_port:
+            raise ConfigError('reporter::multicast_port must be specified')
+        else:
+            try:
+                self.multicast_port = convert_to_integer(self.multicast_port)
+            except ConversionError:
+                raise ConfigError('reporter::multicast_port must be an integer number')
+
+        self.log.info('Reporting to multicast address:  %s:%s' % (self.multicast_addr,
+                                                                  self.multicast_port))
+
+    def send_report (self):
+        lines = self.metrics_recorder.publish()
+        message = '\n'.join(lines) + '\n'
+        try:
+            address=(self.multicast_addr, self.multicast_port)
+            sock = MulticastReactable(address)
+            sock.create_socket()
+            sock.write_data(message)
+            sock.close_when_done()
+        except socket.error, why:
+            self.log.warn('Failed to send report: %s' % str(why))
 
 ##############################################################################
 ## THE END
