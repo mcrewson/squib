@@ -52,14 +52,17 @@ class HaproxyOxidizer (PeriodicOxidizer):
     def read_stats_socket (self):
         sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         try:
-            sock.connect(self.stats_socket)
-            sock.sendall('show stat\n')
-            results = ''
-            data = sock.recv(8192)
-            while data:
-                results += data
-                data = sock.recv(2048)
-            return results
+            try:
+                sock.connect(self.stats_socket)
+                sock.sendall('show stat\n')
+                results = ''
+                data = sock.recv(8192)
+                while data:
+                    results += data
+                    data = sock.recv(2048)
+                return results
+            finally:
+                sock.close()
         except socket.error, msg:
             # Failed to retrieve the stats. Damn
             return None
