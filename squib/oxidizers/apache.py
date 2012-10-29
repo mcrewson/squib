@@ -26,19 +26,6 @@ class ApacheOxidizer (PeriodicOxidizer):
     default_address = 'localhost'
     default_port    = 80
 
-    scoreboard_chars = { '_' : 'waiting',
-                         'S' : 'starting',
-                         'R' : 'reading',
-                         'W' : 'writing',
-                         'K' : 'keepalive',
-                         'D' : 'dns',
-                         'C' : 'closing',
-                         'L' : 'logging',
-                         'G' : 'finishing',
-                         'I' : 'idlecleanup',
-                         '.' : 'openslot',
-                       }
-
     def setup (self):
         super(ApacheOxidizer, self).setup()
         self.setup_status_url()
@@ -86,6 +73,7 @@ class ApacheOxidizer (PeriodicOxidizer):
 
     def run_once (self):
         raw = self.read_raw_status()
+        if raw is None: return
         scoreboard = { '_':0, 'S':0, 'R':0, 'W':0, 'K':0, 'D':0, 'C':0, 'L':0, 'G':0, 'I':0, '.':0 }
         for line in raw.split('\n'):
             if not line: continue
