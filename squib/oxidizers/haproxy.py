@@ -71,7 +71,7 @@ class HaproxyOxidizer (PeriodicOxidizer):
 ##############################################################################
 
 if __name__ == "__main__":
-    HaproxyOxidizer('haproxy', dict(period=5.0, stats_socket='/alea/var/run/haproxy.stats')).run()
+    HaproxyOxidizer('haproxy', dict(period=5.0, stats_socket='/var/run/haproxy.stats')).run()
 
 ##############################################################################
 ## THE END
