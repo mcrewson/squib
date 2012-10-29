@@ -103,12 +103,21 @@ class MetricsReader (ReadOnlyFileDescriptorReactable):
     def __init__ (self, metrics_recorder, fd=None, reactor=None):
         ReadOnlyFileDescriptorReactable.__init__(self, fd, reactor)
         self.metrics_recorder = metrics_recorder
+        self.buff = ''
+        self.log = getlog()
 
     def on_data_read (self, data):
-        for line in data.split('\n'):
-            if not line: continue
-            mname, mvalue = line.split(' ', 1)
-            self.metrics_recorder.record(mname, mvalue)
+        self.buff += data
+        lines, _unused, self.buff = self.buff.rpartition('\n')
+        if lines:
+            for line in lines.split('\n'):
+                if not line: continue
+                try:
+                    mname, mvalue = line.split(' ', 1)
+                except ValueError:
+                    self.log.warning('Invalid metric: %s' % line)
+                    continue
+                self.metrics_recorder.record(mname, mvalue)
 
 class ErrorReporter (ReadOnlyFileDescriptorReactable):
 
