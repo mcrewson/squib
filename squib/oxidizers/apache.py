@@ -41,7 +41,6 @@ class ApacheOxidizer (PeriodicOxidizer):
             raise ConfigError('%s::status_url only supports the HTTP protocol' % self.name)
 
         address = url_parts[1]
-        print "address =", address
         if not address:
             self.address = self.default_address
             self.port    = self.default_port
