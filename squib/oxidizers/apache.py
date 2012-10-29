@@ -26,6 +26,19 @@ class ApacheOxidizer (PeriodicOxidizer):
     default_address = 'localhost'
     default_port    = 80
 
+    scoreboard_chars = { '_' : 'waiting',
+                         'S' : 'starting',
+                         'R' : 'reading',
+                         'W' : 'writing',
+                         'K' : 'keepalive',
+                         'D' : 'dns',
+                         'C' : 'closing',
+                         'L' : 'logging',
+                         'G' : 'finishing',
+                         'I' : 'idlecleanup',
+                         '.' : 'openslot',
+                       }
+
     def setup (self):
         super(ApacheOxidizer, self).setup()
         self.setup_status_url()
@@ -73,7 +86,33 @@ class ApacheOxidizer (PeriodicOxidizer):
 
     def run_once (self):
         raw = self.read_raw_status()
-        print raw
+        scoreboard = { '_':0, 'S':0, 'R':0, 'W':0, 'K':0, 'D':0, 'C':0, 'L':0, 'G':0, 'I':0, '.':0 }
+        for line in raw.split('\n'):
+            if not line: continue
+            key, value = [ l.strip() for l in line.split(':', 1) ]
+            if key == 'Total Accesses':
+                print '%s.requests derivmeter %s' % (self.name, value)
+            elif key == 'Total kBytes':
+                print '%s.kbytes derivmeter %s' % (self.name, value)
+            elif key == 'BusyWorkers':
+                print '%s.busyworkers gauge %s' % (self.name, value)
+            elif key == 'IdleWorkers':
+                print '%s.idleworkers gauge %s' % (self.name, value)
+            elif key == 'Scoreboard':
+                for j in range(len(value)):
+                    scoreboard[value[j]] += 1
+                print '%s.scoreboard.waiting gauge %s'     % (self.name, scoreboard['_'])
+                print '%s.scoreboard.starting gauge %s'    % (self.name, scoreboard['S'])
+                print '%s.scoreboard.reading gauge %s'     % (self.name, scoreboard['R'])
+                print '%s.scoreboard.writing gauge %s'     % (self.name, scoreboard['W'])
+                print '%s.scoreboard.keepalive gauge %s'   % (self.name, scoreboard['K'])
+                print '%s.scoreboard.dnslookup gauge %s'   % (self.name, scoreboard['D'])
+                print '%s.scoreboard.closing gauge %s'     % (self.name, scoreboard['C'])
+                print '%s.scoreboard.logging gauge %s'     % (self.name, scoreboard['L'])
+                print '%s.scoreboard.finishing gauge %s'   % (self.name, scoreboard['G'])
+                print '%s.scoreboard.idlecleanup gauge %s' % (self.name, scoreboard['I'])
+                print '%s.scoreboard.openslot gauge %s'    % (self.name, scoreboard['.'])
+
 
     def read_raw_status (self):
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -103,7 +142,7 @@ class ApacheOxidizer (PeriodicOxidizer):
 ##############################################################################
 
 if __name__ == "__main__":
-    ApacheOxidizer('apache', dict(period=5.0, status_url='http://archlab01.dev.alea.ca/server-status?auto')).run()
+    ApacheOxidizer('apache', dict(period=5.0, status_url='http://localhost/server-status?auto')).run()
 
 ##############################################################################
 ## THE END
