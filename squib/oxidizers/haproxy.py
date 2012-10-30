@@ -47,7 +47,12 @@ class HaproxyOxidizer (PeriodicOxidizer):
             for idx in range(self.num_stats):
                 val = parts[idx+2]
                 if val:
-                    print '%s.%s.%s.%s %s' % (self.name, parts[0], parts[1], self.stats[idx], val)
+                    m = self.stats[idx]
+                    if m == 'status':
+                        mtype = 'string'
+                    else:
+                        mtype = 'gauge'
+                    print '%s.%s.%s.%s %s %s' % (self.name, parts[0], parts[1], m, mtype, val)
 
     def read_stats_socket (self):
         sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
