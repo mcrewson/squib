@@ -86,7 +86,9 @@ class MetricsRecorder (object):
             mtype_args = mtype_string[paren_open+1:paren_clos]
             mtype_string = mtype_string[:paren_open]
 
-        if mtype_string == 'gauge':
+        if mtype_string == 'string':
+            mtype = StringMetric
+        elif mtype_string == 'gauge':
             mtype = GaugeMetric
         elif mtype_string in ('counter', 'cnt'):
             mtype = CounterMetric
@@ -148,6 +150,20 @@ class InvalidMetric (BaseMetric):
         pass
     def report (self, lines, prefix, epoch):
         pass
+
+##############################################################################
+
+class StringMetric (BaseMetric):
+
+    def __init__ (self, name, *args):
+        super(StringMetric, self).__init__(name, *args)
+        self.value = 0
+
+    def update (self, value):
+        self.value = value
+
+    def report (self, lines, prefix, epoch):
+        lines.append("%s%s.string \"%s\" %d" % (prefix, self.name, self.value, epoch))
 
 ##############################################################################
 

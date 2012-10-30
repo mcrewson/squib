@@ -16,11 +16,11 @@
 
 import socket
 
-from squib.core.async             import SocketReactable
+from squib.core.asyncnet          import TCPReactable, MulticastReactable
 from squib.core.baseobject        import BaseObject
 from squib.core.config            import ConfigError
 from squib.core.log               import getlog
-from squib.core.string_conversion import convert_to_integer, convert_to_seconds, ConversionError
+from squib.core.string_conversion import convert_to_bool, convert_to_integer, convert_to_seconds, ConversionError
 
 ##############################################################################
 
@@ -113,14 +113,12 @@ class TcpReporter (BaseReporter):
         lines = self.metrics_recorder.publish()
         message = '\n'.join(lines) + '\n'
         try:
-            sock = SocketReactable(addr=(self.destination_addr, self.destination_port))
+            sock = TCPReactable(address=(self.destination_addr, self.destination_port))
             sock.create_socket()
             sock.write_data(message)
             sock.close_when_done()
         except socket.error, why:
             self.log.warn('Failed to send report: %s' % str(why))
-
-##############################################################################
 
 class GraphiteReporter (TcpReporter):
     """Do not break old configurations..."""
@@ -128,6 +126,63 @@ class GraphiteReporter (TcpReporter):
     default_graphite_server = 'localhost'
     default_graphite_port   = 2003
 
+##############################################################################
+
+class MulticastReporter (BaseReporter):
+
+    def setup (self):
+        super(MulticastReporter, self).setup()
+        self.setup_address()
+
+    def setup_address (self):
+        self.multicast_addr = self.reporter_config.get('multicast_addr')
+        if not self.multicast_addr:
+            raise ConfigError('reporter::multicast_addr must be specified')
+
+        self.multicast_port = self.reporter_config.get('multicast_port')
+        if not self.multicast_port:
+            raise ConfigError('reporter::multicast_port must be specified')
+        else:
+            try:
+                self.multicast_port = convert_to_integer(self.multicast_port)
+            except ConversionError:
+                raise ConfigError('reporter::multicast_port must be an integer number')
+
+        self.multicast_ttl = self.reporter_config.get('multicast_ttl')
+        if self.multicast_ttl:
+            try:
+                self.multicast_ttl = convert_to_integer(self.multicast_ttl)
+            except ConversionError:
+                raise ConfigError('reporter::multicast_ttl must be an integer number')
+
+        self.multicast_loopback = self.reporter_config.get('multicast_loopback', True)
+        try:
+            self.multicast_loopback = convert_to_bool(self.multicast_loopback)
+        except ConversionError:
+            raise ConfigError('reporter::multicast_loopback must be a boolean')
+
+
+        self.log.info('Reporting to multicast address:  %s:%s' % (self.multicast_addr,
+                                                                  self.multicast_port))
+        if self.multicast_ttl is not None:
+            self.log.info('MulticastReporter will send reports beyond this network (multicast_ttl = %d)' % self.multicast_ttl)
+        if self.multicast_loopback == False:
+            self.log.info('MulticastReporter will NOT send reports to this machine (multicast_loopback = False)')
+
+    def send_report (self):
+        lines = self.metrics_recorder.publish()
+        message = '\n'.join(lines) + '\n'
+        try:
+            address=(self.multicast_addr, self.multicast_port)
+            sock = MulticastReactable(address)
+            sock.create_socket()
+            if self.multicast_ttl:
+                sock.set_ttl(self.multicast_ttl)
+            sock.set_loopback_mode(self.multicast_loopback)
+            sock.write_data(message)
+            sock.close_when_done()
+        except socket.error, why:
+            self.log.warn('Failed to send report: %s' % str(why))
 
 ##############################################################################
 ## THE END
