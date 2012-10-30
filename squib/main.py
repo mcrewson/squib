@@ -31,7 +31,7 @@ from squib import metrics, oxidizer, reporter, selfstats, statistics, utility
 class SquibMain (Application):
 
     app_name = 'squib'
-    app_version = '0.0.1'
+    app_version = '0.0.2'
 
     long_cmdline_args = [ 'nodaemon', ]
 
