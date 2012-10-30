@@ -197,10 +197,10 @@ class ChildController (object):
         self.log = getlog()
 
         self.priority = 999
-        self.startsecs = 1
+        self.startsecs = 12
         self.startretries = 3
         self.stopsignal = _signum("TERM")
-        self.stopwaitsecs = 10
+        self.stopwaitsecs = 22
 
     def __cmp__ (self, other):
         return cmp(self.priority, other.priority)
@@ -257,7 +257,7 @@ class ChildController (object):
         elif state == ChildStates.STOPPING:
             time_left = self.delay - now
             if time_left <= 0:
-                self.kill("KILL")
+                self.kill(_signum("KILL"))
 
     def launch (self):
         if self.pid:
@@ -298,7 +298,7 @@ class ChildController (object):
         except OSError, why:
             code = why[0]
             if code == errno.EAGAIN:
-                errmsg = 'Too many processes in process table to sawn %r' % (self.name)
+                errmsg = 'Too many processes in process table to spawn %r' % (self.name)
             else:
                 errmsg = 'unknown error: %s' % errno.errorcode.get(code, code)
             self.log.warn("launch error: %s" % errmsg)
@@ -375,6 +375,19 @@ class ChildController (object):
 
         try:
             os.kill(self.pid, sig)
+        except OSError, err:
+            if err.errno == 3:
+                # No such process
+                msg = 'failed to kill %s (%s): no such process.  Has it already died?' % (self.name, self.pid)
+                self.log.warning(msg)
+            else:
+                msg = "unknown problem killing %s (%s): errno=%d, %s" % (self.name, self.pid, err.errno, err.strerror)
+                self.log.critical(msg)
+            self.change_state(ChildStates.UNKNOWN)
+            self.pid = 0
+            self.killing = 0
+            self.delay = 0
+            return msg
         except:
             tb = _get_exception_string()
             msg = "unknown problem killing %s (%s): %s" % (self.name, self.pid, tb)

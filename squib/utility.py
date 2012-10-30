@@ -25,12 +25,6 @@ def daemonize ():
         os._exit(0)
 
     # Child
-    os.close(0)
-    sys.stdin = sys.__stdin__ = open("/dev/null")
-    os.close(1)
-    sys.stdout = sys.__stdout__ = open("/dev/null", "w")
-    os.close(2)
-    sys.stderr = sys.__stderr__ = open("/dev/null", "w")
     os.setsid()
 
 ##############################################################################

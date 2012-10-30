@@ -14,6 +14,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os, traceback
+
 from squib.core.async     import ReadOnlyFileDescriptorReactable
 from squib.core.config    import ConfigError
 from squib.core.log       import getlog
@@ -94,7 +96,11 @@ class PythonOxidizer (BaseOxidizer):
             raise ConfigError("Cannot determine how to invoke this oxidizer: %s" % klass)
 
     def run (self):
-        self.oxidizer.run()
+        try:
+            self.oxidizer.run()
+        except:
+            tb = traceback.format_exc()
+            os.write(2, '\'%s\' oxidizer threw an unexpected exception:\n%s' % (self.name, tb))
             
 ##############################################################################
 

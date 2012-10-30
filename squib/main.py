@@ -38,6 +38,7 @@ class SquibMain (Application):
     def __init__ (self, **kw):
         super(SquibMain, self).__init__(**kw)
         self.nodaemon = False
+        self.daemonized = False
         self.pid_file = None
 
     def cmdline_handler (self, argument, value):
@@ -111,7 +112,9 @@ class SquibMain (Application):
         if nodaemon == False:
             try:
                 if convert_to_bool(self.config.get('common::nodaemon', False)) == False:
-                    utility.daemonize()
+                    if self.daemonized == False:
+                        utility.daemonize()
+                        self.daemonized = True
             except ConversionError:
                 raise ConfigError("nodaemon must be a boolean")
 
