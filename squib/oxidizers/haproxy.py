@@ -16,7 +16,7 @@
 
 import socket, sys
 
-from squib.core.config    import ConfigError
+from mccorelib.config    import ConfigError
 from squib.oxidizers.base import PeriodicOxidizer
 
 ##############################################################################

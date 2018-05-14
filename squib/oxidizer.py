@@ -16,10 +16,10 @@
 
 import os, traceback
 
-from squib.core.async     import ReadOnlyFileDescriptorReactable
-from squib.core.config    import ConfigError
-from squib.core.log       import getlog
-from squib.core.multiproc import ChildController
+from mccorelib.async     import ReadOnlyFileDescriptorReactable
+from mccorelib.config    import ConfigError
+from mccorelib.log       import getlog
+from mccorelib.multiproc import ChildController
 from squib.oxidizers.base import BasePythonOxidizer
 
 from squib import utility
@@ -46,10 +46,10 @@ class BaseOxidizer (ChildController):
         pass
 
     def get_stdout_reactable (self, stdout_fd):
-        return MetricsReader(self.metrics_recorder, stdout_fd)
+        return MetricsReader(self.metrics_recorder, fd=stdout_fd)
 
     def get_stderr_reactable (self, stderr_fd):
-        return ErrorReporter(stderr_fd)
+        return ErrorReporter(fd=stderr_fd)
 
 ##############################################################################
 
@@ -95,7 +95,12 @@ class PythonOxidizer (BaseOxidizer):
             # Give up
             raise ConfigError("Cannot determine how to invoke this oxidizer: %s" % klass)
 
+    def rename_oxidizer_process (self):
+        pname = 'ox:%s' % self.name
+        utility.set_process_name(pname)
+
     def run (self):
+        self.rename_oxidizer_process()
         try:
             self.oxidizer.run()
         except:
@@ -106,8 +111,8 @@ class PythonOxidizer (BaseOxidizer):
 
 class MetricsReader (ReadOnlyFileDescriptorReactable):
 
-    def __init__ (self, metrics_recorder, fd=None, reactor=None):
-        ReadOnlyFileDescriptorReactable.__init__(self, fd, reactor)
+    def __init__ (self, metrics_recorder, **kw):
+        super(MetricsReader, self).__init__(**kw)
         self.metrics_recorder = metrics_recorder
         self.buff = ''
         self.log = getlog()
@@ -127,8 +132,8 @@ class MetricsReader (ReadOnlyFileDescriptorReactable):
 
 class ErrorReporter (ReadOnlyFileDescriptorReactable):
 
-    def __init__ (self, fd=None, reactor=None):
-        ReadOnlyFileDescriptorReactable.__init__(self, fd, reactor)
+    def __init__ (self, **kw):
+        ReadOnlyFileDescriptorReactable.__init__(self, **kw)
         self.log = getlog()
 
     def on_data_read (self, data):

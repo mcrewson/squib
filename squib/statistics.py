@@ -14,17 +14,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import heapq, math, random, time
+import heapq, math, random, sys, time
 
-from squib.core.async import get_reactor
+from mccorelib.async import get_reactor
 
 ##############################################################################
 
-EWMA_DECAY_INTERVAL = 5.0 # seconds
+EWMA_DECAY_INTERVAL = 10.0 # seconds
 
-M1_ALPHA  = 1 - math.exp(-5 / 60.0)
-M5_ALPHA  = 1 - math.exp(-5 / 60.0 / 5)
-M15_ALPHA = 1 - math.exp(-5 / 60.0 / 15)
+M1_ALPHA  = 1 - math.exp(-EWMA_DECAY_INTERVAL / 60.0)
+M5_ALPHA  = 1 - math.exp(-EWMA_DECAY_INTERVAL / 60.0 / 5)
+M15_ALPHA = 1 - math.exp(-EWMA_DECAY_INTERVAL / 60.0 / 15)
 
 all_ewmas = []
 
@@ -35,11 +35,16 @@ class ExponentiallyWeightedMovingAverage (object):
         self.alpha = alpha
         self.interval = interval
         self.rate = 0.0
-        self.initialized = False
         self.uncounted = 0
+        self.initialized = False
 
         global all_ewmas
         all_ewmas.append(self)
+
+    def initialize (self, rate, uncounted):
+        self.rate = rate
+        self.uncounted = uncounted
+        self.initialized = True
 
     def update (self, n):
         self.uncounted += n

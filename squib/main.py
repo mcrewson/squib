@@ -17,12 +17,12 @@
 
 import os, re, signal, sys, tempfile, time
 
-from squib.core.application       import Application
-from squib.core.async             import free_reactor
-from squib.core.config            import ConfigError
-from squib.core.log               import getlog
-from squib.core.multiproc         import ParentController, ParentStates
-from squib.core.string_conversion import convert_to_bool, ConversionError
+from mccorelib.application       import Application
+from mccorelib.async             import free_reactor
+from mccorelib.config            import ConfigError
+from mccorelib.log               import getlog
+from mccorelib.multiproc         import ParentController, ParentStates
+from mccorelib.string_conversion import convert_to_bool, ConversionError
 
 from squib import metrics, oxidizer, reporter, selfstats, statistics, utility
 
@@ -31,7 +31,7 @@ from squib import metrics, oxidizer, reporter, selfstats, statistics, utility
 class SquibMain (Application):
 
     app_name = 'squib'
-    app_version = '0.0.2'
+    app_version = '0.1.0'
 
     long_cmdline_args = [ 'nodaemon', ]
 
@@ -50,6 +50,7 @@ class SquibMain (Application):
     def setup (self):
         super(SquibMain, self).setup()
         self.log = getlog()
+        self.rename_process()
         self.configure_metrics_recorder()
         self.configure_reporter()
         self.configure_oxidizers()
@@ -61,11 +62,16 @@ class SquibMain (Application):
         self.remove_pid()
         super(SquibMain, self).cleanup()
 
+    def rename_process (self):
+        utility.set_process_name(self.app_name)
+
     def configure_metrics_recorder (self):
         hostname = utility.calculate_hostname()
         if '.' in hostname:
             hostname = hostname.split('.', 1)[0]
-        self.metrics_recorder = metrics.MetricsRecorder(prefix='%s.' % hostname)
+        save_file = self.config.get('common::metrics_save_file', None)
+        self.metrics_recorder = metrics.MetricsRecorder(prefix='%s.' % hostname,
+                                                        save_file=save_file)
 
     def configure_reporter (self):
         try:
@@ -153,6 +159,7 @@ class SquibMain (Application):
     def run (self):
         self.log.info("%s %s STARTED" % (self.app_name, self.app_version))
         self.controller.start()
+        self.metrics_recorder.save()
         self.log.info("%s %s STOPPED" % (self.app_name, self.app_version))
 
 ##############################################################################

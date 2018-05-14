@@ -16,8 +16,8 @@
 
 import resource, time
 
-from squib.core.baseobject import BaseObject
-from squib.core.async      import get_reactor
+from mccorelib.baseobject import BaseObject
+from mccorelib.async      import get_reactor
 
 ##############################################################################
 

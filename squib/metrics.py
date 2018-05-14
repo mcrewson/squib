@@ -16,10 +16,20 @@
 
 import math, platform, time
 
-from squib                        import statistics
-from squib.core.baseobject        import NonStdlibError
-from squib.core.log               import getlog
-from squib.core.string_conversion import ConversionError, convert_to_integer
+from mccorelib.baseobject        import NonStdlibError
+from mccorelib.application       import OperationError
+from mccorelib.log               import getlog
+from mccorelib.string_conversion import ConversionError, convert_to_integer
+from squib                       import statistics
+
+try:
+    import json
+    json_encode = json.dumps
+    json_decode = json.loads
+except ImportError:
+    import jsonlib
+    json_encode = jsonlib.encode
+    json_decode = jsonlib.decode
 
 ##############################################################################
 
@@ -35,11 +45,14 @@ else:
 
 class MetricsRecorder (object):
 
-    def __init__ (self, prefix=""):
+    def __init__ (self, prefix="", save_file=None):
         self.log = getlog()
         self.prefix = prefix
+        self.save_file = save_file
+        self.saved_metrics = None
         self.all_metrics = {}
         self.selfstats = None
+        self.load_saved_metrics()
 
     def set_selfstats (self, selfstats):
         self.selfstats = selfstats
@@ -47,7 +60,7 @@ class MetricsRecorder (object):
     def record (self, name, value):
         mtype, mtype_args, pvalue = self.parse_value(value)
 
-        full_name = "%s:%s:%s" % (name, mtype, mtype_args)
+        full_name = "%s:%s:%s" % (name, mtype.__name__, mtype_args)
         m = self.all_metrics.get(full_name)
         if m is None:
             # New metric. Create it
@@ -61,6 +74,7 @@ class MetricsRecorder (object):
                     m = mtype(name)
                 else:
                     m = mtype(name, *mtype_args)
+                self.restore_metric(m, full_name)
             except MetricError:
                 self.log.warn("Ignored invalid metric: \"%s %s\"" % (name, value))
                 self.all_metrics[full_name] = InvalidMetric(name)
@@ -122,6 +136,64 @@ class MetricsRecorder (object):
             m.report(lines, self.prefix, epoch)
         return lines
 
+    def save (self):
+        if self.save_file is None: return
+        epoch = int(time.time())
+        lines = [ '# Squib metrics save file',
+                  '# ** DO NOT EDIT **',
+                  'timestamp %s' % epoch,
+                ]
+        for mname, metric in self.all_metrics.items():
+            mdata = json_encode(metric.save())
+            if mdata is None: continue
+            lines.append('%s %s' % (mname, mdata))
+        try:
+            fp = open(self.save_file, 'w')
+            fp.write('\n'.join(lines) + '\n')
+            fp.close()
+        except (IOError, OSError), why:
+            raise OperationError("Failed to save metrics to a file: %s" % str(why))
+
+    def load_saved_metrics (self):
+        if self.save_file is None: return
+        try:
+            fp = open(self.save_file, 'r')
+            lines = fp.readlines()
+            fp.close()
+        except (IOError, OSError), why:
+            self.log.debug("Not loading a saved metrics file: %s" % str(why))
+            return
+
+        epoch = None
+        saved_metrics = {}
+        for line in lines:
+            line = line.strip()
+            if not line or line[0] == '#': continue
+            if line.startswith('timestamp '):
+                try:
+                    epoch = int(line.split(' ', 1)[1])
+                except (IndexError, ValueError), why:
+                    self.log.debug("Not loading a saved metrics file (%s): invalid timestamp" % self.save_file)
+                    return
+
+            else:
+                try:
+                    mname, mdata = line.split(' ', 1)
+                    saved_metrics[mname] = json_decode(mdata)
+                except (IndexError, ValueError), why:
+                    self.log.debug("Skipping saved metric (%s): invalid format in file (%s)" % (mname, str(why)))
+                    continue
+
+        self.saved_epoch = epoch
+        self.saved_metrics = saved_metrics
+        self.log.debug("Loaded %d saved metrics from file (%s)" % (len(self.saved_metrics), self.save_file))
+
+    def restore_metric (self, metric, mname):
+        if self.saved_metrics is None: return
+        mdata = self.saved_metrics.get(mname)
+        if mdata is not None:
+            metric.load(mdata, self.saved_epoch)
+
 ##############################################################################
 
 class BaseMetric (object):
@@ -142,6 +214,12 @@ class BaseMetric (object):
 
     def report (self, lines, prefix, epoch):
         raise NotImplementedError
+
+    def save (self):
+        return None
+
+    def load (self, metric_data, timestamp):
+        pass
 
 ##############################################################################
 
@@ -179,6 +257,12 @@ class GaugeMetric (BaseMetric):
     def report (self, lines, prefix, epoch):
         lines.append("%s%s.value %s %d" % (prefix, self.name, self.value, epoch))
 
+    def save (self):
+        return { 'value': self.value }
+
+    def load (self, data, timestamp):
+        self.value = data['value']
+
 ##############################################################################
 
 class CounterMetric (BaseMetric):
@@ -197,6 +281,12 @@ class CounterMetric (BaseMetric):
 
     def report (self, lines, prefix, epoch):
         lines.append("%s%s.count %d %d" % (prefix, self.name, self.count, epoch))
+
+    def save (self):
+        return { 'count': self.count }
+
+    def load (self, data, timestamp):
+        self.count = data['count']
 
 ##############################################################################
 
@@ -220,10 +310,19 @@ class DerivativeMetric (BaseMetric):
         if self.last_value == 0:
             result = 0
         else:
-            old = self.last_value
             if value < self.last_value:
-                old = old - self.max_value
-            result = value - old
+                if self.last_value + abs(value) > self.max_value:
+                    # overflow! attempt compensate for it.
+                    self.log.warn("Derivative overflow for %s ! Attempting to compensate: (value=%d, last_value=%d, max_value=%d)"
+                                  % (self.name, value, self.last_value, self.max_value))
+                    result = value - (self.last_value - self.max_value)
+                else:
+                    # reset! same as if last_value == 0
+                    self.log.warn("Derivative value for %s reset! Was squib restarted?  (value=%d, last_value=%d, max_value=%d)"
+                                  % (self.name, value, self.last_value, self.max_value))
+                    result = 0
+            else:
+                result = value - self.last_value
 
         self.last_value = value
         return result
@@ -257,7 +356,7 @@ class MeterMetric (BaseMetric):
         super(MeterMetric, self).__init__(name, *args)
 
         self.count = 0
-        self.startTime = time.time()
+        self.start_time = time.time()
 
         self.m1_rate  = statistics.one_minute_ewma()
         self.m5_rate  = statistics.five_minute_ewma()
@@ -277,15 +376,40 @@ class MeterMetric (BaseMetric):
     def report (self, lines, prefix, epoch):
         lines.append("%s%s.count %d %d" % (prefix, self.name, self.count, epoch))
         lines.append("%s%s.meanRate %2.2f %d" % (prefix, self.name, self.mean_rate(), epoch))
-        lines.append("%s%s.1minuteRate %2.2f %d" % (prefix, self.name, self.m1_rate.averageValue(), epoch))
-        lines.append("%s%s.5minuteRate %2.2f %d" % (prefix, self.name, self.m5_rate.averageValue(), epoch))
-        lines.append("%s%s.15minuteRate %2.2f %d" % (prefix, self.name, self.m15_rate.averageValue(), epoch))
+        m1_val = self.m1_rate.averageValue()
+        if m1_val is not None:
+            lines.append("%s%s.1minuteRate %2.2f %d" % (prefix, self.name, m1_val, epoch))
+        m5_val = self.m5_rate.averageValue()
+        if m5_val is not None:
+            lines.append("%s%s.5minuteRate %2.2f %d" % (prefix, self.name, m5_val, epoch))
+        m15_val = self.m15_rate.averageValue()
+        if m15_val is not None:
+            lines.append("%s%s.15minuteRate %2.2f %d" % (prefix, self.name, m15_val, epoch))
 
     def mean_rate (self):
         if self.count == 0:
             return 0.0
         else:
-            return self.count / (time.time() - self.startTime)
+            return self.count / (time.time() - self.start_time)
+
+    def save (self):
+        return { 'count':self.count, 'start_time':self.start_time, 
+                 'm1_rate':self.m1_rate.rate, 'm1_uncounted':self.m1_rate.uncounted,
+                 'm5_rate':self.m5_rate.rate, 'm5_uncounted':self.m5_rate.uncounted,
+                 'm15_rate':self.m15_rate.rate, 'm15_uncounted':self.m15_rate.uncounted, }
+
+    def load (self, data, timestamp):
+        self.count = data['count']
+        self.start_time = data['start_time']
+
+        # Only load the metrics if they will still have an effect on the current values
+        now = int(time.time())
+        if now - timestamp < 60:
+            self.m1_rate.initialize(data['m1_rate'], data['m1_uncounted'])
+        if now - timestamp < 300:
+            self.m5_rate.initialize(data['m5_rate'], data['m5_uncounted'])
+        if now - timestamp < 900:
+            self.m15_rate.initialize(data['m15_rate'], data['m15_uncounted'])
 
 ##############################################################################
 

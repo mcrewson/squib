@@ -16,8 +16,8 @@
 
 import os, re, sys, time
 
-from squib.core.config            import ConfigError
-from squib.core.string_conversion import convert_to_bool, ConversionError
+from mccorelib.config            import ConfigError
+from mccorelib.string_conversion import convert_to_bool, ConversionError
 from squib.oxidizers.base         import PeriodicOxidizer
 
 ##############################################################################

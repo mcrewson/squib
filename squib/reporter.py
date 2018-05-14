@@ -16,11 +16,11 @@
 
 import socket
 
-from squib.core.asyncnet          import TCPReactable, MulticastReactable
-from squib.core.baseobject        import BaseObject
-from squib.core.config            import ConfigError
-from squib.core.log               import getlog
-from squib.core.string_conversion import convert_to_bool, convert_to_integer, convert_to_seconds, ConversionError
+from mccorelib.asyncnet          import TCPReactable, MulticastReactable
+from mccorelib.baseobject        import BaseObject
+from mccorelib.config            import ConfigError
+from mccorelib.log               import getlog
+from mccorelib.string_conversion import convert_to_bool, convert_to_integer, convert_to_seconds, ConversionError
 
 ##############################################################################
 
@@ -59,6 +59,15 @@ class BaseReporter (BaseObject):
 
     def send_report (self):
         pass
+
+##############################################################################
+
+class NopReporter (BaseReporter):
+
+    def send_report (self):
+        # Execute the metrics_recorder's publish function, 
+        #but do nothing with the results
+        self.metrics_recorder.publish()
 
 ##############################################################################
 
@@ -112,6 +121,9 @@ class TcpReporter (BaseReporter):
     def send_report (self):
         lines = self.metrics_recorder.publish()
         message = '\n'.join(lines) + '\n'
+        self._send_tcp(message)
+
+    def _send_tcp (self, message):
         try:
             sock = TCPReactable(address=(self.destination_addr, self.destination_port))
             sock.create_socket()
@@ -125,6 +137,40 @@ class GraphiteReporter (TcpReporter):
 
     default_graphite_server = 'localhost'
     default_graphite_port   = 2003
+
+    def setup_address (self):
+        destination_addr = self.reporter_config.get('graphite_server')
+        if destination_addr is None:
+            if self.default_graphite_server is not None:
+                self.log.warning('no graphite_server specified for GraphiteReporter. Using default: %s'
+                                 % self.default_graphite_server)
+                self.destination_addr = self.default_graphite_server
+            else:
+                raise ConfigError('reporter::graphite_server must be specified')
+        else:
+            self.destination_addr = destination_addr
+
+        destination_port = self.reporter_config.get('graphite_port')
+        if destination_port is None:
+            if self.default_graphite_port is not None:
+                self.log.warning('no graphite_port specified for GraphiteReporter. Using default: %s'
+                                 % self.default_graphite_port)
+                self.destination_port = self.default_graphite_port
+            else:
+                raise ConfigError('reporter::graphite_port must be specified')
+        else:
+            try:
+                self.destination_port = convert_to_integer(destination_port)
+            except ConversionError:
+                raise ConfigError('reporter::graphite_port must be an integer number')
+
+        self.log.info('Reporting to graphite server : %s:%s' % (self.destination_addr,
+                                                                self.destination_port))
+
+    def send_report (self):
+        lines = self.metrics_recorder.publish()
+        message = '\n'.join([l for l in lines if not l.split()[1].startswith('"')]) + '\n'
+        self._send_tcp(message)
 
 ##############################################################################
 

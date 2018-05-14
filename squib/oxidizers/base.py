@@ -16,7 +16,7 @@
 
 import time
 
-from squib.core.string_conversion import convert_to_seconds, ConversionError
+from mccorelib.string_conversion import convert_to_seconds, ConversionError
 
 ##############################################################################
 
