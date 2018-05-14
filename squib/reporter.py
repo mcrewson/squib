@@ -294,18 +294,35 @@ class SquibHTTPProtocol (HTTPProtocol):
     def on_request_received (self, request):
         # reject a few explicit urls right away
         if request.uri in ('/favicon.ico', ):
-            request.set_response_code(404, 'where are my pants?')
+            request.set_response_code(404, 'where are your pants?')
             request.set_response_header('Content-Length', '0')
             return
 
+        # No reporter... we are screwed  (should never happen!)
         if self.reporter is None:
-            body = ['No reporter available. Sorry.']
-        else:
-            body = self.reporter.get_current_report()
+            body = 'No reporter available. Something is wrong here...\n'
+            request.set_response_code(500, 'where are my pants?')
+            request.set_response_header('Content-Type', 'text/plain; charset=UTF-8')
+            request.set_response_header('Content-Length', str(len(body)))
+            request.set_response_header('Connection', 'close')
+            request.write(body)
+            return
 
-        body = '\n'.join(body)
+        body = '\n'.join(self.reporter.get_current_report())
 
-        request.set_response_code(200, 'mary had a little lamb')
+        # current_report is empty (too soon?)
+        if len(body) == 0:
+            body = 'No metrics published yet\n'
+            request.set_response_code(503, 'slow down big guy')
+            request.set_response_header('Content-Type', 'text/plain; charset=UTF-8')
+            request.set_response_header('Content-Length', str(len(body)))
+            request.set_response_header('Connection', 'close')
+            request.write(body)
+            return
+
+        # Normal output. Spew the current report
+        body += '\n'
+        request.set_response_code(200, 'OK')
         request.set_response_header('Content-Type', 'text/plain; charset=UTF-8')
         request.set_response_header('Content-Length', str(len(body)))
         request.write(body)
