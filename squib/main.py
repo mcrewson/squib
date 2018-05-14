@@ -1,7 +1,7 @@
 #!/usr/bin/python2
 # vim:set ts=4 sw=4 et nowrap syntax=python ff=unix:
 #
-# Copyright 2011 Mark Crewson <mark@crewson.net>
+# Copyright 2011-2018 Mark Crewson <mark@crewson.net>
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
