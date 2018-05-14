@@ -17,6 +17,8 @@
 import socket
 
 from mccorelib.asyncnet          import TCPReactable, MulticastReactable
+from mccorelib.asyncsvr          import TCPServer
+from mccorelib.http              import HTTPProtocol
 from mccorelib.baseobject        import BaseObject
 from mccorelib.config            import ConfigError
 from mccorelib.log               import getlog
@@ -229,6 +231,89 @@ class MulticastReporter (BaseReporter):
             sock.close_when_done()
         except socket.error, why:
             self.log.warn('Failed to send report: %s' % str(why))
+
+##############################################################################
+
+class PollableReporter (BaseReporter):
+
+    def setup (self):
+        super(PollableReporter, self).setup()
+        self.current_report = []
+
+    def send_report (self):
+        self.current_report = self.metrics_recorder.publish()
+
+    def get_current_report (self):
+        return self.current_report
+
+##############################################################################
+
+class WebPollableReporter (PollableReporter):
+
+    default_server_addr = ''
+    default_server_port = 2018
+
+    def setup (self):
+        super(WebPollableReporter, self).setup()
+        self.setup_server()
+
+    def setup_server (self):
+        server_addr = self.reporter_config.get('server_addr')
+        if server_addr is None:
+            if self.default_server_addr is not None:
+                self.log.warning('no server_addr specified for WebPollableReporter. Using default: %s'
+                                 % self.default_server_addr)
+                self.server_addr = self.default_server_addr
+            else:
+                raise ConfigError('reporter::server_addr must be specified')
+        else:
+            self.server_addr = server_addr
+
+        server_port = self.reporter_config.get('server_port')
+        if server_port is None:
+            if self.default_server_port is not None:
+                self.log.warning('no server_port specified for WebPollableReport. Using default: %s'
+                                 % self.default_server_port)
+                self.server_port = self.default_server_port
+            else:
+                raise ConfigError('reporter::server_port must be specified')
+        else:
+            try:
+                self.server_port = convert_to_integer(server_port)
+            except ConversionError:
+                raise ConfigError('reporter::server_port must be an integer number')
+
+        httpserver = SquibHTTPServer(address=(self.server_addr, self.server_port), reporter=self).activate()
+
+class SquibHTTPProtocol (HTTPProtocol):
+
+    def __init__ (self, reporter=None, **kw):
+        super(SquibHTTPProtocol, self).__init__(**kw)
+        self.reporter = reporter
+
+    def on_request_received (self, request):
+        # reject a few explicit urls right away
+        if request.uri in ('/favicon.ico', ):
+            request.set_response_code(404, 'where are my pants?')
+            request.set_response_header('Content-Length', '0')
+            return
+
+        if self.reporter is None:
+            body = ['No reporter available. Sorry.']
+        else:
+            body = self.reporter.get_current_report()
+
+        body = '\n'.join(body)
+
+        request.set_response_code(200, 'mary had a little lamb')
+        request.set_response_header('Content-Type', 'text/plain; charset=UTF-8')
+        request.set_response_header('Content-Length', str(len(body)))
+        request.write(body)
+
+class SquibHTTPServer (TCPServer):
+
+    def __init__ (self, **kw):
+        super(SquibHTTPServer, self).__init__(SquibHTTPProtocol, **kw)
 
 ##############################################################################
 ## THE END
