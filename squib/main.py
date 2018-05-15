@@ -19,7 +19,7 @@ import os, re, signal, sys, tempfile, time
 
 from mccorelib.application       import Application
 from mccorelib.async             import free_reactor
-from mccorelib.config            import ConfigError
+from mccorelib.config            import Config, ConfigError
 from mccorelib.log               import getlog
 from mccorelib.multiproc         import ParentController, ParentStates
 from mccorelib.string_conversion import convert_to_bool, ConversionError
@@ -54,6 +54,7 @@ class SquibMain (Application):
         self.configure_metrics_recorder()
         self.configure_reporter()
         self.configure_oxidizers()
+        self.configure_extra_oxidizers()
         self.configure_selfstats()
         self.daemonize()
         self.write_pid()
@@ -104,6 +105,36 @@ class SquibMain (Application):
             except ConfigError, err:
                 self.log.warn(str(err))
                 self.log.warn("Invalid oxidizer named \"%s\". Ignored" % (ox))
+
+    def configure_extra_oxidizers (self):
+        oxconfig_dir = self.config.get('common::oxidizers_config_directory', None)
+        if oxconfig_dir is None:
+            self.log.debug('No common::oxidizers_config_directory defined. Skipping extra oxidizers.')
+            return
+        if not os.path.isdir(oxconfig_dir):
+            self.log.warn('No directory, skipping extra oxidizers: %s' % oxconfig_dir)
+            return
+
+        for oxfile in os.listdir(oxconfig_dir):
+            oxname = os.path.splitext(oxfile)[0]
+            oxfile = os.path.join(oxconfig_dir, oxfile)
+            if not os.path.isfile(oxfile):
+                self.log.warn('Not an oxidizer config file, skipping: %s' % oxfile)
+                continue
+            self.log.debug('Reading extra oxidizer config file: %s' % oxfile)
+
+            try:
+                try:
+                    oxconfig = Config(oxfile).section('oxidizer')
+                except KeyError:
+                    self.log.warn("Invalid configuration file %s: no [oxidizer] section" % oxfile)
+                    continue
+
+                self.controller.add_child(oxidizer.create_oxidizer(oxname, oxconfig, self.metrics_recorder))
+            except ConfigError, err:
+                self.log.warn(str(err))
+                self.log.warn("Invalid oxidizer named \"%s\" (from file: %s). Ingored" % (oxname, oxfile))
+
 
     def configure_selfstats (self):
         try:
